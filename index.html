@@ -250,8 +250,8 @@ function commit(){
 }
 let capsReady=false, micReason="", gumTried=false, lastErr="-";
 // ---------- OTAK AI MANDIRI: dipakai bila tidak ada penghubung claude.ai ----------
-const AI_DEF={gemini:"gemini-2.5-flash",claude:"claude-haiku-5-5"};
-const AI_FALLBACK={gemini:["gemini-flash-latest","gemini-2.5-flash-lite"],claude:[]};
+const AI_DEF={gemini:"gemini-flash-lite-latest",claude:"claude-haiku-5-5"};
+const AI_FALLBACK={gemini:["gemini-flash-lite-latest","gemini-flash-latest","gemini-2.5-flash"],claude:[]};
 function aiCfg(){ let c={}; try{ c=JSON.parse(localStorage.getItem("robi_ai")||"{}"); }catch(_){} return c; }
 function sysSplit(msgs){ // pisahkan blok instruksi dari pesan pertama
  const m=msgs.map(x=>({...x})); let sys="";
@@ -271,7 +271,7 @@ async function callGemini(c,msgs,signal){
    const j=await r.json().catch(()=>({}));
    if(r.ok){ return (j.candidates?.[0]?.content?.parts||[]).map(p=>p.text||"").join("").trim(); }
    lastE={code:r.status===429?"rate_limited":r.status===400||r.status===403?"bad_key":"api_error",message:(j.error&&j.error.message)||("HTTP "+r.status)};
-   if(r.status!==404) break;
+   if(![404,429,500,503].includes(r.status)) break;   // model penuh/tidak ada -> coba model cadangan
  }
  throw lastE;
 }
@@ -312,7 +312,7 @@ function aiHelp(){
  if(!(window.claude&&window.claude.use)){
    return location.protocol==="file:"
     ? "AI belum aktif. Buka ⚙ → OTAK AI, tempel kunci API (Gemini gratis), lalu tekan Simpan & uji."
-    : "AI tidak aktif: halaman ini dibuka di luar claude.ai.";
+    : "AI belum aktif. Buka ⚙ → OTAK AI, tempel kunci API (Gemini gratis), lalu tekan Simpan & uji.";
  }
  return "AI tidak aktif di jendela ini walau sudah di claude.ai. Coba: (1) buka alamat artifact di tab Chrome/Edge biasa, bukan aplikasi terpasang atau HP; (2) pastikan sudah masuk akun claude.ai; (3) muat ulang halaman.";
 }
@@ -674,7 +674,7 @@ rec=setupWeb(); engine=rec?"web":"none";
    tts.onPosition(({ms})=>{ if(lip.tl) lip.tStart=performance.now()-ms; }); }catch(_){} }
  if(!sample&&aiCfg().key) sample=makeExternalSample();
  initAIForm();
- if(!sample) setStatus(aiHelp());
+ if(!sample){ setStatus(aiHelp()); $("drawer").classList.add("open"); setTimeout(()=>$("secAI").scrollIntoView({block:"center"}),300); }
  $("aiDiag").textContent=diag();
  if(engine==="none") noMic();
  else $("micDiag").textContent=engine==="web"?"Mikrofon: pengenal suara browser (siap).":"Mikrofon: mikrofon Claude (siap).";
