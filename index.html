@@ -1111,7 +1111,7 @@ const pdbPut=d=>pdbDo("readwrite",st=>st.put(d));
 const pdbDel=id=>pdbDo("readwrite",st=>st.delete(id));
 
 // ---------- indeks pencarian (BM25 ringan, bahasa Indonesia) ----------
-const PSTOP=new Set(("yang dan di ke dari untuk pada dalam dengan atau juga saja ini itu ada adalah akan sudah telah bisa dapat tidak bukan apa apakah bagaimana berapa kapan siapa mana dimana mengapa kenapa robi tolong mau ingin tahu saya kami kita kamu anda dia mereka pak bu ibu bapak nya lah kah pun para oleh sebagai karena agar supaya jika kalau maka tentang seperti lebih sangat banyak semua setiap tersebut jadi lagi masih belum harus boleh mohon coba jelaskan sebutkan ceritakan beritahu").split(" "));
+const PSTOP=new Set(("yang dan di ke dari untuk pada dalam dengan atau juga saja ini itu ada adalah akan sudah telah bisa dapat tidak bukan apa apakah bagaimana berapa kapan siapa mana dimana mengapa kenapa robi tolong mau ingin tahu saya kami kita kamu anda dia mereka pak bu ibu bapak nya lah kah pun para oleh sebagai karena agar supaya jika kalau maka tentang seperti lebih sangat banyak semua setiap tersebut jadi lagi masih belum harus boleh mohon coba jelaskan sebutkan ceritakan beritahu pelajaran belajar").split(" "));
 function pstem(w){ if(w.length>5) w=w.replace(/(nya|lah|kah|pun)$/,""); return w; }
 const TKMAP={vii:7,viii:8,ix:9,"7":7,"8":8,"9":9,tujuh:7,delapan:8,sembilan:9}, NMAP={satu:1,dua:2,tiga:3,empat:4,lima:5,enam:6,tujuh:7};
 function normKelas(s){   // "kelas 8.3", "VIII-3", "kelas delapan tiga" -> "kls83"
@@ -1119,6 +1119,10 @@ function normKelas(s){   // "kelas 8.3", "VIII-3", "kelas delapan tiga" -> "kls8
   s=s.replace(/\b(?:kelas|kls)\s*(viii|vii|ix|tujuh|delapan|sembilan|[789])\s*[\.\-\/ ]?\s*([1-7]|satu|dua|tiga|empat|lima|enam|tujuh)\b/g,(m,a,b)=>` kls${TKMAP[a]}${NMAP[b]||b} `);
   s=s.replace(/\b(viii|vii|ix)\s*[\.\-\/]\s*([1-7])\b/g,(m,a,b)=>` kls${TKMAP[a]}${b} `);
   s=s.replace(/(^|[^\d\.])([789])[\.\-\/]([1-7])(?![\d\.])/g,(m,p0,a,b)=>`${p0} kls${a}${b} `);
+  const ORD={pertama:1,kesatu:1,kedua:2,ketiga:3,keempat:4,kelima:5,keenam:6,ketujuh:7,kedelapan:8};
+  s=s.replace(/jam\s*(?:ke)?\s*-?\s*(\d)\s*(?:sampai|hingga|s\/d|-|–)\s*(?:ke)?\s*-?\s*(\d)\b/g,(m,a,b)=>{ let o=" "; for(let i=+a;i<=+b&&i<=9;i++) o+=`jamke${i} `; return o; });
+  s=s.replace(/jam\s*ke\s*-?\s*(\d)\b/g,(m,a)=>` jamke${a} `);
+  s=s.replace(/jam\s*(pertama|kesatu|kedua|ketiga|keempat|kelima|keenam|ketujuh|kedelapan)\b/g,(m,a)=>` jamke${ORD[a]} `);
   return s;
 }
 function ptok(s){ return normKelas(s).normalize("NFKD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9\s]/g," ").split(/\s+/).filter(w=>w.length>=2&&!PSTOP.has(w)).map(pstem); }
@@ -1127,16 +1131,18 @@ function chunkText(t,size=750){
   const out=[]; let cur="";
   const push=()=>{ if(cur.trim()) out.push(cur.trim()); cur=""; };
   for(let p of paras){
-    while(p.length>size){ let cut=p.lastIndexOf(". ",size); if(cut<size*0.5) cut=p.lastIndexOf(" ",size); if(cut<size*0.5) cut=size;
-      if(cur){ push(); } out.push(p.slice(0,cut+1).trim()); p=p.slice(Math.max(0,cut+1-120)).trim(); }   // tumpang-tindih ±120 huruf
-    if((cur+"\n"+p).length>size) push(); cur=cur?cur+"\n"+p:p;
+    const head=p.startsWith("#")?p.split("\n")[0]:"", lim=head?1300:size;
+    if(head) push();   // judul = awal potongan baru (satu topik per potongan)
+    while(p.length>lim){ let cut=p.lastIndexOf("; ",lim); if(cut<lim*0.5) cut=p.lastIndexOf(". ",lim); if(cut<lim*0.5) cut=p.lastIndexOf(" ",lim); if(cut<lim*0.5) cut=lim;
+      if(cur){ push(); } out.push(p.slice(0,cut+1).trim()); p=(head&&!p.slice(cut+1).startsWith("#")?head+" (lanjutan)\n":"")+p.slice(Math.max(0,cut+1-(head?0:120))).trim(); }   // potongan lanjutan membawa judulnya
+    if(head||(cur+"\n"+p).length>size) push(); cur=cur?cur+"\n"+p:p;
   }
   push(); return out;
 }
 function pustIndex(){
   pustChunks=[]; pustDF=new Map(); let tot=0;
   for(const d of pustDocs){ if(d.aktif===false) continue;
-    (d.potongan||[]).forEach((text,i)=>{ const tk=ptok(d.judul+" "+text), tf=new Map(); tk.forEach(w=>tf.set(w,(tf.get(w)||0)+1));
+    (d.potongan||[]).forEach((text,i)=>{ const h=text.startsWith("#")?text.split("\n")[0]:""; const tk=[...ptok(d.judul+" "+text),...ptok(h),...ptok(h)], tf=new Map(); /* kata di judul potongan berbobot 3x */ tk.forEach(w=>tf.set(w,(tf.get(w)||0)+1));
       pustChunks.push({doc:d,i,text,tf,len:tk.length}); tot+=tk.length; for(const w of tf.keys()) pustDF.set(w,(pustDF.get(w)||0)+1); }); }
   pustAvg=pustChunks.length?tot/pustChunks.length:1;
 }
