@@ -1111,9 +1111,17 @@ const pdbPut=d=>pdbDo("readwrite",st=>st.put(d));
 const pdbDel=id=>pdbDo("readwrite",st=>st.delete(id));
 
 // ---------- indeks pencarian (BM25 ringan, bahasa Indonesia) ----------
-const PSTOP=new Set(("yang dan di ke dari untuk pada dalam dengan atau juga saja ini itu ada adalah akan sudah telah bisa dapat tidak bukan apa apakah bagaimana berapa kapan siapa mana dimana mengapa kenapa robi tolong mau ingin tahu saya kami kita kamu anda dia mereka nya lah kah pun para oleh sebagai karena agar supaya jika kalau maka tentang seperti lebih sangat banyak semua setiap tersebut jadi lagi masih belum harus boleh mohon coba jelaskan sebutkan ceritakan beritahu").split(" "));
+const PSTOP=new Set(("yang dan di ke dari untuk pada dalam dengan atau juga saja ini itu ada adalah akan sudah telah bisa dapat tidak bukan apa apakah bagaimana berapa kapan siapa mana dimana mengapa kenapa robi tolong mau ingin tahu saya kami kita kamu anda dia mereka pak bu ibu bapak nya lah kah pun para oleh sebagai karena agar supaya jika kalau maka tentang seperti lebih sangat banyak semua setiap tersebut jadi lagi masih belum harus boleh mohon coba jelaskan sebutkan ceritakan beritahu").split(" "));
 function pstem(w){ if(w.length>5) w=w.replace(/(nya|lah|kah|pun)$/,""); return w; }
-function ptok(s){ return (s||"").toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9\s]/g," ").split(/\s+/).filter(w=>w.length>=2&&!PSTOP.has(w)).map(pstem); }
+const TKMAP={vii:7,viii:8,ix:9,"7":7,"8":8,"9":9,tujuh:7,delapan:8,sembilan:9}, NMAP={satu:1,dua:2,tiga:3,empat:4,lima:5,enam:6,tujuh:7};
+function normKelas(s){   // "kelas 8.3", "VIII-3", "kelas delapan tiga" -> "kls83"
+  s=(s||"").toLowerCase();
+  s=s.replace(/\b(?:kelas|kls)\s*(viii|vii|ix|tujuh|delapan|sembilan|[789])\s*[\.\-\/ ]?\s*([1-7]|satu|dua|tiga|empat|lima|enam|tujuh)\b/g,(m,a,b)=>` kls${TKMAP[a]}${NMAP[b]||b} `);
+  s=s.replace(/\b(viii|vii|ix)\s*[\.\-\/]\s*([1-7])\b/g,(m,a,b)=>` kls${TKMAP[a]}${b} `);
+  s=s.replace(/(^|[^\d\.])([789])[\.\-\/]([1-7])(?![\d\.])/g,(m,p0,a,b)=>`${p0} kls${a}${b} `);
+  return s;
+}
+function ptok(s){ return normKelas(s).normalize("NFKD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9\s]/g," ").split(/\s+/).filter(w=>w.length>=2&&!PSTOP.has(w)).map(pstem); }
 function chunkText(t,size=750){
   const paras=String(t||"").replace(/\r/g,"").split(/\n\s*\n|\n(?=\[Hal \d+\])/).map(s=>s.replace(/[ \t]+/g," ").trim()).filter(Boolean);
   const out=[]; let cur="";
@@ -1147,13 +1155,17 @@ async function pustReload(){ try{ pustDocs=await pdbAll(); }catch(_){ pustDocs=[
 // ---------- sumber utama untuk setiap giliran percakapan ----------
 function pustBlock(q){
   if(!q||!q.q||!pustChunks.length) return "";
+  const HR=["Minggu","Senin","Selasa","Rabu","Kamis","Jumat","Sabtu"], now=new Date(new Date().toLocaleString("en-US",{timeZone:"Asia/Makassar"})), dw=now.getDay();
+  const qq=q.q.replace(/\bhari ini\b|\bsekarang\b/gi,m=>m+" "+HR[dw]).replace(/\bbesok\b/gi,m=>m+" "+HR[(dw+1)%7]).replace(/\blusa\b/gi,m=>m+" "+HR[(dw+2)%7]);
+  q={...q,q:qq};
   let hits=pustSearch(q.q,4);
   if(!hits.length&&q.prev) hits=pustSearch(q.q+" "+q.prev,4,q.q);   // pertanyaan lanjutan: konteks sebelumnya, tapi harus cocok juga dengan pertanyaan sekarang
   if(!hits.length) return "\n[PUSTAKA ROBI] Tidak ada referensi pustaka yang relevan untuk pertanyaan ini; jawab dari data sekolah atau pengetahuan umummu.";
   let total=0; const parts=[];
   for(const h of hits){ const t=h.c.text.slice(0,1400); if(total+t.length>4200) break; total+=t.length; parts.push(`(Sumber: ${h.c.doc.judul})\n${t}`); }
   window.__pustLast=hits.map(h=>({judul:h.c.doc.judul,skor:+h.s.toFixed(2)}));
-  return "\n[PUSTAKA ROBI — SUMBER UTAMA]\nBerikut potongan dari dokumen/gambar/video yang diunggah sekolah dan paling relevan dengan pertanyaan:\n"+parts.join("\n---\n")+
+  const w=runTool("waktu_sekarang",{});
+  return `\n[WAKTU SEKARANG] ${w.hari_tanggal}, pukul ${w.jam}.`+"\n[PUSTAKA ROBI — SUMBER UTAMA]\nBerikut potongan dari dokumen/gambar/video yang diunggah sekolah dan paling relevan dengan pertanyaan:\n"+parts.join("\n---\n")+
     "\n[AKHIR PUSTAKA]\nATURAN SUMBER: Bila potongan pustaka di atas menjawab pertanyaan, jawablah BERDASARKAN pustaka itu, jangan bertentangan dengannya, dan sebut sumbernya singkat (misalnya 'menurut dokumen "+hits[0].c.doc.judul+"'). "+
     "Bila pustaka tidak cukup atau tidak relevan, barulah pakai pengetahuan umummu dan katakan bahwa itu pengetahuan umum. Jangan membacakan potongan mentah; jelaskan dengan bahasa lisan yang singkat.";
 }
