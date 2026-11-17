@@ -3,7 +3,7 @@
  "short_name": "ROBI",
  "start_url": "./",
  "scope": "./",
- "display": "standalone",
+ "display": "fullscreen",
  "background_color": "#150c36",
  "theme_color": "#2b1866",
  "lang": "id",
@@ -19,5 +19,11 @@
    "type": "image/png",
    "purpose": "any maskable"
   }
- ]
+ ],
+ "display_override": [
+  "fullscreen",
+  "standalone"
+ ],
+ "orientation": "landscape",
+ "id": "./"
 }
