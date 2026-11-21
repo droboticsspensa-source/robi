@@ -1098,7 +1098,8 @@ setTimeout(()=>{ if(KIOSK){ cekSuaraDiizinkan(); kiosStart(); } },600);
 //  - Tidak ada yang relevan -> ROBI memakai pengetahuan umum AI
 // =====================================================================
 const PUST_VER="pustaka-1.0";
-const LIB_PDF=new URL("lib/pdf.min.mjs",location.href).href, LIB_PDFW=new URL("lib/pdf.worker.min.mjs",location.href).href;
+function _libURL(rel){ for(const base of [location.href, document.baseURI, location.origin+location.pathname]){ try{ if(base) return new URL(rel, base).href; }catch(_){} } return rel; }
+const LIB_PDF=_libURL("lib/pdf.min.mjs"), LIB_PDFW=_libURL("lib/pdf.worker.min.mjs");
 let pustDocs=[], pustChunks=[], pustDF=new Map(), pustAvg=1, pustQuery=null;
 
 // ---------- penyimpanan (IndexedDB: muat ratusan MB, tidak seperti localStorage) ----------
@@ -2566,7 +2567,23 @@ var __BUKU_BAWAAN={"Kelas":[{"kode":"VII-1","nama":"VII Analyst"},{"kode":"VII-2
     sumber = x ? 'ekspor menu Input Data ' + (x.diekspor || '') : 'Buku Data bawaan';
   }
   muat();
-  function jawabData(q, now = new Date()) { try { return PK.jawabTerpadu(String(q || ''), now, { book: BUKU, P, T }); } catch (e) { return { text: null, intent: 'GALAT' }; } }
+  function jawabKegiatan(q, now) {
+    const t = String(q || '').toLowerCase();
+    if (/\bkelas\b|\bguru\b|\bpak\b|\bbu\b|\bibu\b/.test(t)) return null;
+    const act = /istirahat/.test(t) ? 'Istirahat' : /(shalat|sholat|sembahyang)/.test(t) ? 'Shalat berjamaah' : /upacara/.test(t) ? 'Upacara bendera' : null;
+    if (!act) return null;
+    if (!/(jam berapa|pukul berapa|kapan|berapa|mulai|waktu)/.test(t)) return null;
+    let hari = null; const hm = t.match(/\b(senin|selasa|rabu|kamis|jumat|jum'at|sabtu|minggu)\b/);
+    if (hm) { const mh = { senin: 'Senin', selasa: 'Selasa', rabu: 'Rabu', kamis: 'Kamis', jumat: 'Jumat', "jum'at": 'Jumat', sabtu: 'Sabtu', minggu: 'Minggu' }; hari = mh[hm[1]]; }
+    else if (/besok/.test(t)) { const d = new Date(now); d.setDate(d.getDate() + 1); hari = HARI[d.getDay()]; }
+    else if (/lusa/.test(t)) { const d = new Date(now); d.setDate(d.getDate() + 2); hari = HARI[d.getDay()]; }
+    else hari = HARI[now.getDay()];
+    if (hari === 'Minggu') return { text: 'Hari Minggu sekolah libur.', intent: 'KEGIATAN' };
+    const rows = (BUKU.Jam_Pelajaran || []).filter(j => j.hari === hari && j.kegiatan === act);
+    if (!rows.length) return { text: 'Hari ' + hari + ' tidak ada ' + act.toLowerCase() + '.', intent: 'KEGIATAN' };
+    return { text: act + ' hari ' + hari + ' pukul ' + rows[0].mulai + ' sampai ' + rows[rows.length - 1].selesai + '.', intent: 'KEGIATAN' };
+  }
+  function jawabData(q, now = new Date()) { try { const kg = jawabKegiatan(q, now); if (kg) return kg; return PK.jawabTerpadu(String(q || ''), now, { book: BUKU, P, T }); } catch (e) { return { text: null, intent: 'GALAT' }; } }
   function infoHariIni() {
     const now = new Date(), s = new C.Sesi(); s.dengar('robi', 0); const D = PK.dataPada(BUKU, P, C.tglLokal(now));
     let jam = ''; try { jam = TK.proses('sekarang jam ke berapa', s, now, D, T).text || ''; } catch (e) {}
