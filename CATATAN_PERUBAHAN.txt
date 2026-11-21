@@ -1,0 +1,73 @@
+CATATAN PERUBAHAN ROBI
+======================
+Pondasi: v1.2 (21 Nov 2026) — dasar ROBI Kios 1.0 + cara kerja v2 + menu Penyedia Suara.
+(v1.3 dan v1.3.1 sudah dibatalkan atas permintaan Pak BOS; ROBI kembali ke v1.2.)
+
+v1.2.4 — 21 Nov 2026
+Dasar permintaan Pak BOS: "[KIOS] Layar tidak tidur (Wake Lock). [KINERJA] Riwayat di layar
+dibatasi 60 pesan; catatan teks suara lama dibersihkan. kerjakan ini jika dapat menambah kinerja robi"
+Dikerjakan:
+ - Layar tetap menyala (modul "layar_terjaga"): selama mode kios aktif dan ROBI tampil, peramban
+   diminta menjaga layar menyala, sehingga Windows tidak mematikan layar/menidurkan komputer saat
+   kios lama tidak disentuh. Diminta ulang otomatis bila sempat dilepas. Tidak aktif di halaman
+   admin dan mode non-kios.
+TIDAK dikerjakan (tidak menambah kinerja, hasil penelusuran kode):
+ - Batas riwayat 60 pesan: di mode kios layar percakapan sudah dikosongkan setiap percakapan baru
+   (mulaiSesi), jadi riwayat tidak pernah menumpuk.
+ - Pembersihan catatan teks suara: hanya dipakai suara Claude di claude.ai, ukurannya kecil.
+Uji: uji_layar.py (kios: aktif & diminta ulang setelah dilepas; admin & non-kios: tidak aktif)
+ + uji lama lulus. Belum dicoba di komputer kios sungguhan.
+Kembali ke v1.2.3: pakai index.html dari ROBI_Kios_v1.2.3.zip.
+
+v1.2.3 — 21 Nov 2026
+Dasar laporan & permintaan Pak BOS: ROBI berhenti menjelaskan karena hitungan jeda menunggu mikrofon
+berjalan, lalu otomatis mengakhiri percakapan. "waktu memulai menghitung jeda tidak ada perintah
+adalah sejak robi diam".
+Akar masalah (terbukti di uji): semua kalimat jawaban masuk antrean suara sekaligus, dan pengaman
+waktu tiap kalimat dihitung sejak MASUK antrean, bukan sejak diucapkan. Pada jawaban panjang ROBI
+dianggap sudah selesai padahal masih bicara -> hitungan hening mulai -> "Baik, sampai jumpa lagi!"
+memotong penjelasan (uji: kalimat ke-3 dari 4 terpotong).
+Diubah (hanya satu hal): modul kecil "jeda_diam" di akhir index.html:
+ 1. ROBI baru kembali ke mode mendengar setelah suaranya benar-benar berhenti
+    (pengaman: maksimal menunggu 3 menit).
+ 2. Hitungan jeda hening ditahan selama ROBI berbicara atau berpikir, dan dimulai dari nol
+    begitu ROBI diam.
+Hasil uji: 4 kalimat (28 dtk) diucapkan utuh; percakapan berakhir 6,2 dtk setelah ROBI diam
+ (jeda diatur 6 dtk); pertanyaan baru 3 dtk setelah ROBI diam tetap dilayani; menyela ROBI tetap
+ bisa. Uji lama lulus. Belum dicoba di komputer kios sungguhan.
+Kembali ke v1.2.2: pakai index.html dari ROBI_Kios_v1.2.2.zip.
+
+v1.2.2 — 21 Nov 2026
+Dasar permintaan Pak BOS: "[BUG] Suara Google di Chrome terputus pada kalimat panjang ...
+lakukan perbaikan agar robi bisa berbicara panjang"
+Diubah (hanya satu hal):
+ - Ditambah modul kecil "bicara_panjang" di akhir index.html (di atas v1.2.1).
+   Kalimat lebih dari 200 huruf dipecah menjadi potongan <=180 huruf di titik jeda alami
+   (titik koma/titik dua, koma, kata sambung), lalu diucapkan berurutan dengan suara yang sama.
+ - Berbeda dari v1.3 yang dicabut:
+   a. TANPA pause/resume (yang dicurigai mengubah suara);
+   b. hanya aktif untuk suara Google ONLINE di Chrome (yang terkena bug);
+   c. suara Microsoft/Edge, suara Claude, dan penyedia awan TIDAK disentuh;
+   d. kalimat <=200 huruf diucapkan persis seperti v1.2.
+Uji: uji_panjang.py (Chrome-Google: 305 huruf -> 2 ucapan 132+172; Edge-Gadis: tetap 1 ucapan;
+ kalimat biasa tetap 1 ucapan) + uji.py, uji_tanpa.py, uji_suara.py, uji_jaringan.py lulus.
+ Belum didengar langsung di komputer kios.
+Kembali ke v1.2.1: pakai index.html dari ROBI_Kios_v1.2.1.zip.
+
+v1.2.1 — 21 Nov 2026
+Dasar permintaan Pak BOS: "[BUG] Galat jaringan pengenal suara membuat ROBI berhenti di 'ketuk untuk
+bicara' selamanya -> pulih otomatis ... lakukan perbaikan untuk bug ini"
+Diubah (hanya satu hal):
+ - Ditambah modul kecil "pulih_jaringan" di akhir index.html. Bila galat terakhir pengenal suara
+   adalah galat JARINGAN:
+   a. pengenal sudah hidup lagi tetapi layar masih "ketuk untuk bicara" -> kembali mendengar;
+   b. pengenal mati -> dinyalakan lagi dengan jeda 2,5 / 5 / 10 / 20 / 30 detik;
+   c. saat internet kembali -> langsung dicoba lagi (mode kios menyala sendiri).
+   Selama internet masih putus, ROBI menunggu (tidak mencoba terus-menerus).
+Tidak diubah: semua isi v1.2 lainnya (berkas v1.2 utuh, hanya ditambah modul ini di belakang).
+ Suara, cara bicara, karakter, data, AI, Penyedia Suara, dan galat selain jaringan tetap perilaku v1.2.
+ Catatan: kunci Gemini lama masih tertanam (sama seperti v1.2).
+Uji: uji_jaringan.py (galat jaringan pulih, menjawab lagi, menunggu saat offline, pulih saat online,
+ galat lain tidak disentuh) + uji.py, uji_tanpa.py, uji_suara.py lulus. Diuji dengan tiruan
+ mikrofon; belum di komputer kios sungguhan.
+Kembali ke v1.2: pakai index.html dari ROBI_Kios_v1.2.zip.

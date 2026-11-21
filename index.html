@@ -1392,5 +1392,1643 @@ function pustRender(){
 pustReload();
 
 </script>
+<script>
+/* === MESIN DATA ROBI (robi_core) === */
+var __m={};
+(function(){var module={exports:{}},exports=module.exports,require=function(n){return __m[n]};
+// ROBI core v1.0 — logika inti jalur cepat (tanpa jaringan). Bisa dipakai di Node dan peramban.
+'use strict';
+const HARI = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+const ROM = ['0', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII'];
+const ANGKA = { nol: 0, satu: 1, dua: 2, tiga: 3, empat: 4, lima: 5, enam: 6, tujuh: 7, delapan: 8, sembilan: 9, sepuluh: 10 };
+const ORDINAL = { pertama: 1, kesatu: 1, kedua: 2, ketiga: 3, keempat: 4, kelima: 5, keenam: 6, ketujuh: 7, kedelapan: 8 };
+const GELAR = new Set(['h', 'hj', 'dra', 'dr', 'drs', 's', 'pd', 'si', 'ag', 'kom', 'sos', 'st', 'm', 'i', 'dg', 'am', 'bm', 'k', 'p', 'abd', 'ali', 'ananda', 'ide', 'nur', 'spd', 'mpd']);
+const SAPAAN = '(?:pak|bapak|bpk|bu|ibu|bunda|ustadz|ustazah)';
+
+// ---------- normalisasi ----------
+function norm(s) {
+  let t = ' ' + String(s).toLowerCase().replace(/[’']/g, '').replace(/[“”"!?,;()]/g, ' ') + ' ';
+  t = t.replace(/c\s*\+\s*\+/g, ' cplusplus ').replace(/c\s+plus\s+plus|si\s+plus\s+plus|c\s*plus\s*plus|\bcpp\b/g, ' cplusplus ');
+  t = t.replace(/jum\s*at/g, 'jumat').replace(/\bkls\b/g, 'kelas');
+  for (const [w, n] of Object.entries(ORDINAL)) t = t.replace(new RegExp(`\\b${w}\\b`, 'g'), ` ke ${n} `);
+  for (const [w, n] of Object.entries(ANGKA)) t = t.replace(new RegExp(`\\b${w}\\b`, 'g'), ` ${n} `);
+  t = t.replace(/\bke\s*-\s*/g, 'ke ').replace(/\s+/g, ' ');
+  return t;
+}
+function lev(a, b) {
+  const m = a.length, n = b.length; if (Math.abs(m - n) > 2) return 9;
+  const d = Array.from({ length: m + 1 }, (_, i) => [i]);
+  for (let j = 1; j <= n; j++) d[0][j] = j;
+  for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++)
+    d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  return d[m][n];
+}
+const tmin = s => { const [h, m] = s.split('.').map(Number); return h * 60 + m; };
+const fmt = m => `${String(Math.floor(m / 60)).padStart(2, '0')}.${String(m % 60).padStart(2, '0')}`;
+
+// ---------- data: Buku Data ROBI -> indeks ----------
+const KELAS_ALIAS = {
+  'Analyst': ['analyst', 'analis', 'anelis'], 'Coding': ['coding', 'koding'], 'Designer': ['designer', 'desainer', 'disainer'],
+  'Developer': ['developer', 'divelover', 'developper'], 'Engineer': ['engineer', 'enjinir'], 'Programmer': ['programmer', 'programer'],
+  'Webmaster': ['webmaster', 'web master'], 'Java Script': ['java script', 'javascript', 'java', 'jawa script'], 'PHP': ['php', 'p h p', 'pe ha pe'],
+  'C++': ['cplusplus', 'c plus'], 'Pascal': ['pascal', 'paskal'], 'Visual Basic': ['visual basic', 'visualbasic', 'vb'],
+  'Ruby': ['ruby', 'rubi'], 'Algoritma': ['algoritma', 'algoritme'], 'Biner': ['biner', 'binner'], 'Cloud': ['cloud', 'klod', 'klaud', 'clod'],
+  'Data Base': ['data base', 'database', 'databes', 'data bes']
+};
+const MAPEL_ALIAS = {
+  A: ['pendidikan agama', 'agama', 'pai', 'budi pekerti'], B: ['ppkn', 'pkn', 'pancasila', 'kewarganegaraan'],
+  C: ['bahasa indonesia', 'b indonesia', 'b indo', 'bindo', 'bhs indonesia', 'indonesia'], D: ['matematika', 'mtk', 'matematik', 'mate'],
+  E: ['ipa', 'sains', 'fisika', 'biologi'], F: ['ips', 'ilmu sosial'], G: ['bahasa inggris', 'b inggris', 'inggris', 'english', 'bing'],
+  H: ['pjok', 'penjas', 'penjaskes', 'olahraga', 'olah raga', 'penjas orkes'], J: ['seni budaya', 'seni', 'sbk'], K: ['informatika', 'tik', 'komputer'],
+  L: ['bahasa daerah', 'bahasa bugis', 'bugis', 'mulok']
+};
+
+function buildData(book) {
+  const kelas = book.Kelas.map(k => {
+    const [tk, no] = k.kode.split('-'); const nama = k.nama.replace(/^(VII|VIII|IX)\s+/, '');
+    return { kode: k.kode, nama: k.nama, pendek: nama, tingkat: { VII: 7, VIII: 8, IX: 9 }[tk], no: +no, alias: (KELAS_ALIAS[nama] || [nama.toLowerCase()]) };
+  });
+  const guru = {}; for (const g of book.Kode_Guru) {
+    const tokens = norm(g.nama).trim().split(/[\s.]+/).filter(x => x.length >= 3 && !GELAR.has(x));
+    guru[g.kode] = { kode: g.kode, nama: g.nama, tokens };
+  }
+  const mapel = {}; for (const m of book.Kode_Mapel) mapel[m.kode] = m.nama;
+  const slot = {}; // hari -> jam_ke -> {mulai, selesai, kegiatan}
+  const jeda = {}; // hari -> [{mulai,selesai,kegiatan}]
+  for (const j of book.Jam_Pelajaran) {
+    if (j.jam_ke === null || j.jam_ke === undefined || j.jam_ke === '') { (jeda[j.hari] ||= []).push(j); continue; }
+    (slot[j.hari] ||= {})[j.jam_ke] = { mulai: j.mulai, selesai: j.selesai, kegiatan: j.kegiatan || '' };
+  }
+  const jadwal = []; // {hari, jam_ke, kelas, mapel, guru}
+  for (const r of book.Roster_Kode) for (const k of kelas) {
+    const c = r[k.kode]; if (!c) continue;
+    const m = /^([A-Z])(\d{1,2})$/.exec(String(c).trim()); if (!m) continue;
+    jadwal.push({ hari: r.hari, jam_ke: +r.jam_ke, kelas: k.kode, mapel: m[1], guru: +m[2] });
+  }
+  return { kelas, guru, mapel, slot, jeda, jadwal, layanan: book.Layanan || [], faq: book.Tanya_Jawab || [], info: book.Info_Hari_Ini || [] };
+}
+
+// ---------- validator Buku Data (dijalankan setiap sinkron) ----------
+function validate(book, opts = {}) {
+  const err = [], warn = []; const target = opts.jamPerMinggu || 41;
+  const kelasKode = new Set(book.Kelas.map(k => k.kode)); const gk = new Set(book.Kode_Guru.map(g => +g.kode)); const mk = new Set(book.Kode_Mapel.map(m => m.kode));
+  const slotKey = new Set(book.Jam_Pelajaran.filter(j => j.jam_ke !== null).map(j => `${j.hari}|${j.jam_ke}`));
+  const beban = {}; const pakai = {};
+  book.Roster_Kode.forEach((r, i) => {
+    if (!HARI.includes(r.hari)) err.push(`Roster baris ${i + 2}: hari "${r.hari}" tidak dikenal`);
+    if (!slotKey.has(`${r.hari}|${r.jam_ke}`)) err.push(`Roster baris ${i + 2}: jam ke-${r.jam_ke} hari ${r.hari} tidak ada di Jam_Pelajaran`);
+    for (const k of kelasKode) {
+      const c = r[k]; if (c === undefined || c === '') { warn.push(`Roster ${r.hari} jam ke-${r.jam_ke}: sel kelas ${k} kosong`); continue; }
+      const m = /^([A-Z])(\d{1,2})$/.exec(String(c).trim());
+      if (!m) { err.push(`Roster ${r.hari} jam ke-${r.jam_ke} kelas ${k}: kode "${c}" tidak sah`); continue; }
+      if (!mk.has(m[1])) err.push(`Roster ${r.hari} jam ke-${r.jam_ke} kelas ${k}: kode mapel "${m[1]}" tidak ada di Kode_Mapel`);
+      if (!gk.has(+m[2])) err.push(`Roster ${r.hari} jam ke-${r.jam_ke} kelas ${k}: kode guru "${m[2]}" tidak ada di Kode_Guru`);
+      const key = `${r.hari}|${r.jam_ke}|${+m[2]}`; (pakai[key] ||= []).push(k);
+      beban[k] = (beban[k] || 0) + 1;
+    }
+  });
+  for (const [key, ks] of Object.entries(pakai)) if (ks.length > 1) { const [h, j, g] = key.split('|'); warn.push(`Bentrok: guru kode ${g} mengajar ${ks.join(' dan ')} sekaligus pada ${h} jam ke-${j}`); }
+  for (const k of kelasKode) if ((beban[k] || 0) !== target) warn.push(`Kelas ${k}: ${beban[k] || 0} jam pelajaran per minggu (seharusnya ${target})`);
+  return { ok: err.length === 0, err, warn };
+}
+
+// ---------- pemahaman (NLU berbasis aturan) ----------
+function cariKelas(t, D, boleh = true) {
+  const hits = [];
+  if (boleh) for (const k of D.kelas) for (const a of k.alias) if (new RegExp(`(^|\\s)${a.replace(/\+/g, '\\+')}(\\s|$)`).test(t)) { hits.push(k); break; }
+  if (hits.length) {
+    const uniq = [...new Map(hits.map(h => [h.kode, h])).values()];
+    // "java" juga bagian dari "java script": jika ada 1 kelas cukup
+    return uniq.length === 1 ? { kelas: uniq[0] } : { ambigu: uniq };
+  }
+  const m = /(?:kelas\s+)?\b(vii|viii|ix|7|8|9)\s*[.\-\s]\s*([1-9])\b/.exec(t);
+  if (m && (/kelas/.test(t) || /[.\-]/.test(t.slice(m.index, m.index + m[0].length)) || /^(vii|viii|ix)$/.test(m[1]))) {
+    const tk = { vii: 7, viii: 8, ix: 9 }[m[1]] || +m[1];
+    const k = D.kelas.find(x => x.tingkat === tk && x.no === +m[2]); if (k) return { kelas: k };
+    return { tidakAda: `${tk}.${m[2]}` };
+  }
+  const t2 = /kelas\s+(vii|viii|ix|7|8|9)\b(?!\s*[.\-]?\s*\d)/.exec(t);
+  if (t2) { const tk = { vii: 7, viii: 8, ix: 9 }[t2[1]] || +t2[1]; return { tingkatSaja: tk, pilihan: D.kelas.filter(x => x.tingkat === tk) }; }
+  return {};
+}
+function cariHari(t, now) {
+  const map = { senin: 1, selasa: 2, rabu: 3, kamis: 4, jumat: 5, sabtu: 6, minggu: 0, ahad: 0 };
+  for (const [w, d] of Object.entries(map)) if (new RegExp(`\\b${w}\\b`).test(t)) return { hari: HARI[d], eksplisit: true };
+  const rel = [['lusa', 2], ['besok', 1], ['kemarin', -1], ['hari ini', 0], ['sekarang', 0], ['nanti', 0]];
+  for (const [w, o] of rel) if (t.includes(` ${w} `)) { const d = new Date(now.getTime() + o * 864e5); return { hari: HARI[d.getDay()], relatif: w, tanggal: d }; }
+  return {};
+}
+function cariJam(t) {
+  let m;
+  if ((m = /\b(?:jam|pukul)\s+(\d{1,2})[.:](\d{2})\b/.exec(t))) return { pukul: +m[1] * 60 + +m[2] };
+  if ((m = /\bpukul\s+(\d{1,2})\b/.exec(t))) return { pukul: +m[1] * 60 };
+  if ((m = /\bjam(?:\s+pelajaran)?\s+ke\s+(\d{1,2}|viii|vii|vi|iv|v|iii|ii|i)\b/.exec(t))) { const v = /^\d+$/.test(m[1]) ? +m[1] : ROM.indexOf(m[1].toUpperCase()); return { jam: v }; }
+  if ((m = /\bjam\s+(viii|vii|vi|iv|v|iii|ii|i)\b/.exec(t))) return { jam: ROM.indexOf(m[1].toUpperCase()) };
+  if ((m = /\bjam\s+(\d{1,2})\b(?!\s*(?:pagi|siang|sore|malam))/.exec(t)) && +m[1] >= 0 && +m[1] <= 8) return { jam: +m[1], asumsi: true };
+  if (/\b(jam )?(berikut(nya)?|selanjutnya|setelah ini|sesudah ini)\b/.test(t)) return { geser: 1 };
+  if (/\b(jam )?sebelum(nya)?\b/.test(t)) return { geser: -1 };
+  return {};
+}
+function cariMapel(t) {
+  if (/materi agama/.test(t)) return { materiAgama: true };
+  for (const [k, al] of Object.entries(MAPEL_ALIAS)) for (const a of al) if (new RegExp(`(^|\\s)${a}(\\s|$)`).test(t)) return { mapel: k };
+  return {};
+}
+const KATA_MAPEL = new Set(Object.values(MAPEL_ALIAS).flat().filter(a => !a.includes(' ')));
+function cariGuru(t, D) {
+  const words = t.trim().split(/\s+/).map(w => KATA_MAPEL.has(w) ? '#' : w);
+  const all = Object.values(D.guru);
+  const exact = w => all.filter(g => g.tokens.includes(w));
+  const res = new Map();
+  words.forEach((w, i) => {
+    const afterHon = i > 0 && new RegExp(`^${SAPAAN}$`).test(words[i - 1]);
+    let c = exact(w);
+    if (!c.length && afterHon && w.length >= 3) { c = all.filter(g => g.tokens.some(tk => tk.startsWith(w))); if (!c.length && w.length >= 5) c = all.filter(g => g.tokens.some(tk => lev(tk, w) <= 1)); }
+    if (!c.length && !afterHon && w.length >= 6) c = all.filter(g => g.tokens.some(tk => tk.length >= 6 && lev(tk, w) <= 1 && tk[0] === w[0]));
+    if (c.length && (afterHon || w.length >= 4)) c.forEach(g => res.set(g.kode, g));
+    if (c.length && afterHon) res.set('__hon' + i, null);
+  });
+  const gs = [...res.entries()].filter(([k]) => !String(k).startsWith('__')).map(([, g]) => g);
+  if (!gs.length) return {};
+  // nama lengkap dua kata menyempitkan kandidat
+  const best = gs.map(g => [g, g.tokens.filter(tk => words.includes(tk)).length]).sort((a, b) => b[1] - a[1]);
+  const top = best.filter(b => b[1] === best[0][1]).map(b => b[0]);
+  return top.length === 1 ? { guru: top[0] } : { guruAmbigu: top };
+}
+
+const WAKE = /\b(robi|robbi|robby|roby|robie|robbie)\b/;
+const TUTUP = /\b(terima ?kasih|makasih|trima ?kasih|sudah cukup|cukup|dadah|da ?dah|sampai jumpa|bye)\b/;
+const TUTUP_LEMAH = /^\s*(sudah|udah|selesai|oke sudah|ok sudah|sudah ya|udah ya|itu saja|itu aja)\s*$/;
+const isTutup = t => TUTUP.test(t) || TUTUP_LEMAH.test(t);
+const ISYARAT_JADWAL = /\b(kelas|jadwal|roster|jam|hari|senin|selasa|rabu|kamis|jumat|sabtu|minggu|besok|lusa|kemarin|sekarang|guru|mapel|pelajaran ke|masuk|pulang)\b/;
+const SALAM = /\b(halo|hai|hallo|assalamualaikum|asalamualaikum|permisi|selamat (pagi|siang|sore))\b/;
+const BUKAN_DARURAT = /\b(pelajaran|materi|tentang|penyebab|apa itu|kenapa|mengapa|bagaimana|proses|terjadinya|contoh|cerita|film)\b/;
+const DARURAT = /\b(kebakaran|terbakar|berdarah|pingsan|kecelakaan|berkelahi|perkelahian|tawuran|luka parah|kejang|kesurupan|gempa|tolong ada|darurat|keracunan)\b/;
+const MINTA_PRIBADI = /\b(nomor|no|nomer)\s*(hp|telepon|telpon|wa|whatsapp|handphone)\b|\balamat (rumah|tinggal)\b|\balamat(nya)?\s+(pak|bu|ibu|bapak|guru|siswa|si)\b|\b(nik|nisn|nis)\b|\bnilai (rapor|ujian)?\s*(nya|si|milik|punya)\b|\btanggal lahir\b|\bemail(nya)?\s+(pak|bu|ibu|bapak)\b|\bgaji\b/;
+const LUPAKAN = /\blupakan (saya|aku)\b|\bhapus (catatan|data) (saya|aku)\b/;
+const TANYA_JADWAL = /\b(jadwal|pelajaran|belajar|mapel|roster|masuk|pulang|jam|mengajar|ngajar|guru|di mana|dimana|kelas)\b/;
+
+function understand(text, ctx, now, D) {
+  const t = norm(text);
+  const out = { t };
+  if (DARURAT.test(t) && !BUKAN_DARURAT.test(t)) return { ...out, intent: 'DARURAT' };
+  if (LUPAKAN.test(t)) return { ...out, intent: 'LUPAKAN' };
+  if (MINTA_PRIBADI.test(t) && !/\b(sekolah|tu|kantor|perpustakaan|dinas)\b/.test(t)) return { ...out, intent: 'TOLAK_PRIBADI' };
+  const lanjutAwal = /^\s*(kalau|kalo|terus|lalu|bagaimana dengan|gimana dengan|yang|dan|trus)\b/.test(t);
+  const k = cariKelas(t, D, ISYARAT_JADWAL.test(t) || !!(ctx && ctx.topik && (lanjutAwal || t.trim().split(' ').length <= 3))), h = cariHari(t, now), j = cariJam(t), m = cariMapel(t), g = cariGuru(t, D);
+  const slots = { kelas: k.kelas, hari: h.hari, relatif: h.relatif, eksplisitHari: h.eksplisit, jam: j.jam, pukul: j.pukul, geser: j.geser, asumsiJam: j.asumsi, mapel: m.mapel, materiAgama: m.materiAgama, guru: g.guru };
+  const ada = Object.values({ a: k.kelas, b: h.hari, c: j.jam ?? j.pukul ?? j.geser, d: m.mapel, e: g.guru }).some(v => v !== undefined);
+  const lanjutan = /^\s*(kalau|kalo|terus|lalu|bagaimana dengan|gimana dengan|yang|dan|trus)\b/.test(t) || (t.trim().split(' ').length <= 4 && ada);
+  if (ctx && ctx.topik && lanjutan) for (const key of ['kelas', 'hari', 'jam', 'mapel', 'guru']) if (slots[key] === undefined && ctx.topik[key] !== undefined && !(key === 'jam' && (slots.pukul !== undefined))) {
+    if (key === 'jam' && slots.mapel !== undefined) continue;
+    if (key === 'guru' && (slots.kelas !== undefined || slots.mapel !== undefined)) continue;
+    if (key === 'mapel' && slots.guru !== undefined) continue;
+    slots[key] = ctx.topik[key];
+  }
+  if (slots.geser !== undefined) {
+    const base = slots.jam ?? (ctx && ctx.topik ? ctx.topik.jam : undefined);
+    if (base !== undefined && base !== null) slots.jam = base + slots.geser; else slots.sekarangGeser = slots.geser;
+  }
+  if (k.ambigu) return { ...out, intent: 'TANYA_BALIK', alasan: 'kelas_ambigu', pilihan: k.ambigu, slots };
+  if (k.tingkatSaja && !slots.kelas) return { ...out, intent: 'TANYA_BALIK', alasan: 'paralel', pilihan: k.pilihan, slots };
+  if (k.tidakAda) return { ...out, intent: 'KELAS_TIDAK_ADA', nama: k.tidakAda, slots };
+  if (g.guruAmbigu) return { ...out, intent: 'TANYA_BALIK', alasan: 'guru_ambigu', pilihan: g.guruAmbigu, slots };
+  // penutup hanya bila kalimat tidak memuat pertanyaan lain
+  if (isTutup(t) && !ada && !/\?|\b(apa|siapa|kapan|berapa|di ?mana|bagaimana|gimana)\b/.test(t)) return { ...out, intent: 'TUTUP', slots };
+  const sekarang = /\b(sekarang|saat ini)\b/.test(t);
+  const tanyaWaktu = /\b(jam berapa|pukul berapa|jam ke berapa|jam keberapa)\b/.test(t);
+  if (/\b(masuk|pulang|bel)\b/.test(t) && !slots.kelas && !slots.guru && !/\bmasuk (hari ini|sekarang)\b.*\b(pak|bu)\b/.test(t)) return { ...out, intent: 'JAM_SEKOLAH', slots, jenis: /pulang/.test(t) ? 'pulang' : 'masuk' };
+  if (slots.guru && /\b(masuk|hadir|ada|datang|izin|sakit)\b/.test(t) && (h.relatif === 'hari ini' || sekarang || !slots.hari)) return { ...out, intent: 'GURU_HADIR', slots };
+  if (!slots.kelas && !slots.guru && !slots.mapel && (tanyaWaktu || /\bsekarang jam\b/.test(t)) ) return { ...out, intent: 'WAKTU', slots };
+  if (slots.guru && !slots.kelas) {
+    if (slots.hari || sekarang || slots.jam !== undefined || slots.pukul !== undefined || /\b(di ?mana|dimana|lagi)\b/.test(t)) return { ...out, intent: 'GURU_JADWAL', slots, sekarang };
+    return { ...out, intent: 'GURU_PROFIL', slots };
+  }
+  if (slots.kelas) {
+    if (slots.materiAgama) return { ...out, intent: 'KELAS_HARI', slots };
+    if (slots.mapel && /\b(siapa|guru(nya)?|yang mengajar|pengajar)\b/.test(t)) return { ...out, intent: 'GURU_MAPEL_KELAS', slots };
+    if (slots.mapel && !slots.hari && slots.jam === undefined) return { ...out, intent: 'MAPEL_KAPAN', slots };
+    if (slots.jam !== undefined || slots.pukul !== undefined || sekarang || slots.sekarangGeser !== undefined) return { ...out, intent: 'SLOT', slots, sekarang };
+    if (slots.mapel && slots.hari) return { ...out, intent: 'MAPEL_HARI', slots };
+    return { ...out, intent: 'KELAS_HARI', slots };
+  }
+  if (slots.mapel && /\b(siapa|guru)\b/.test(t)) return { ...out, intent: 'GURU_MAPEL', slots };
+  if ((slots.hari || slots.jam !== undefined || sekarang) && /\b(jadwal|pelajaran|belajar|mapel|roster)\b/.test(t)) return { ...out, intent: 'TANYA_BALIK', alasan: 'kelas_kosong', slots };
+  const lay = cocokLayanan(t, D); if (lay) return { ...out, intent: 'LAYANAN', layanan: lay, slots };
+  const faq = cocokFaq(t, D); if (faq) return { ...out, intent: 'FAQ', faq, slots };
+  if (isTutup(t)) return { ...out, intent: 'TUTUP', slots };
+  return { ...out, intent: 'LLM', slots };
+}
+function tokens(s) { return norm(s).trim().split(' ').filter(w => w.length > 2 && !['yang', 'dan', 'untuk', 'apa', 'saya', 'mau', 'ingin', 'bagaimana', 'cara', 'robi', 'bisa', 'tidak', 'ada', 'dengan', 'kalau', 'apakah', 'boleh'].includes(w)); }
+function cocokLayanan(t, D) {
+  let best = null, sc = 0;
+  for (const l of D.layanan) { const kw = String(l.kata_kunci).split(',').map(x => norm(x).trim()).filter(Boolean); const s = kw.filter(w => t.includes(` ${w} `) || t.includes(` ${w}`)).length; if (s > sc) { sc = s; best = l; } }
+  return sc >= 1 ? best : null;
+}
+function cocokFaq(t, D) {
+  const q = new Set(tokens(t)); let best = null, sc = 0;
+  for (const f of D.faq) { if (f.status !== 'terbit') continue; const ft = tokens(f.pertanyaan); const inter = ft.filter(w => q.has(w)).length; const s = inter / Math.max(ft.length, 1); if (s > sc) { sc = s; best = f; } }
+  return sc >= 0.6 ? best : null;
+}
+
+// ---------- jawaban (templat, deterministik) ----------
+function namaGuru(D, kode) { return D.guru[kode] ? D.guru[kode].nama : `guru kode ${kode}`; }
+const tglLokal = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; // tanggal kalender lokal, bukan UTC
+function infoHari(D, tanggal) { const iso = tglLokal(tanggal); return D.info.filter(i => i.tanggal === iso); }
+function jamKe(D, hari, menit) {
+  const s = D.slot[hari] || {}; for (const [k, v] of Object.entries(s)) if (menit >= tmin(v.mulai) && menit < tmin(v.selesai)) return { jam: +k, ...v };
+  for (const j of D.jeda[hari] || []) if (menit >= tmin(j.mulai) && menit < tmin(j.selesai)) return { jeda: j };
+  const ks = Object.values(s); if (!ks.length) return { libur: true };
+  const awal = Math.min(...ks.map(v => tmin(v.mulai))); const akhir = Math.max(...[...ks.map(v => tmin(v.selesai)), ...(D.jeda[hari] || []).map(j => tmin(j.selesai))]);
+  return menit < awal ? { sebelum: fmt(awal) } : { sesudah: fmt(akhir) };
+}
+function slotText(D, hari, jam) { const v = (D.slot[hari] || {})[jam]; return v ? `jam ke-${jam} (${v.mulai}–${v.selesai})` : `jam ke-${jam}`; }
+function catatanInfo(D, tanggal, f) {
+  if (!tanggal) return '';
+  const notes = [];
+  for (const i of infoHari(D, tanggal)) {
+    if (i.jenis === 'guru_berhalangan' && f.guru !== undefined && +i.guru === +f.guru) notes.push(`Namun hari ini ${namaGuru(D, f.guru)} berhalangan${i.isi ? ' (' + i.isi + ')' : ''}.`);
+    if (i.jenis === 'kegiatan' && (!i.kelas || i.kelas === f.kelas)) notes.push(`Info hari ini: ${i.isi}.`);
+    if (i.jenis === 'jam_kosong' && i.kelas === f.kelas && (i.jam === undefined || +i.jam === f.jam)) notes.push(`Info hari ini: jam itu kosong${i.isi ? ', ' + i.isi : ''}.`);
+  }
+  return notes.length ? ' ' + notes.join(' ') : '';
+}
+function answer(u, ctx, now, D) {
+  const s = u.slots || {}; const facts = [];
+  const tanggalHari = (hari) => { // tanggal untuk info hari ini hanya bila hari yg ditanya = hari ini
+    if (s.relatif === 'hari ini' || s.relatif === 'sekarang' || (hari === HARI[now.getDay()] && !s.relatif)) return now;
+    if (s.relatif === 'besok' || s.relatif === 'lusa') return new Date(now.getTime() + (s.relatif === 'besok' ? 1 : 2) * 864e5);
+    return null;
+  };
+  const libur = hari => hari === 'Minggu' || !D.slot[hari];
+  const say = (text, topik, extra = {}) => ({ intent: u.intent, text, topik, facts, ...extra });
+  switch (u.intent) {
+    case 'DARURAT': return say('Ini keadaan darurat. Segera beri tahu guru atau satpam terdekat sekarang.', null, { prioritas: true });
+    case 'TOLAK_PRIBADI': return say('Maaf, saya tidak boleh memberikan data pribadi seseorang. Untuk keperluan itu, silakan hubungi TU atau wali kelas.', null);
+    case 'LUPAKAN': return say('Baik, catatan tentang kamu sudah saya hapus.', null, { aksi: 'lupakan' });
+    case 'TUTUP': return say('Sama-sama! Panggil ROBI kalau perlu lagi, ya.', null, { aksi: 'tutup' });
+    case 'KELAS_TIDAK_ADA': return say(`Kelas ${u.nama} tidak ada di sekolah ini. Kelas VII ada 7, kelas VIII ada 6, dan kelas IX ada 4.`, null);
+    case 'TANYA_BALIK': {
+      if (u.alasan === 'paralel') return say(`Kelas ${u.pilihan[0].tingkat} yang mana? Ada ${u.pilihan.map(k => k.pendek).join(', ')}.`, { ...s, kelas: undefined }, { tanyaBalik: true });
+      if (u.alasan === 'kelas_ambigu') return say(`Maksudnya kelas ${u.pilihan.map(k => k.nama).join(' atau ')}?`, s, { tanyaBalik: true });
+      if (u.alasan === 'guru_ambigu') return say(`Maksudnya ${u.pilihan.map(g => g.nama).join(', atau ')}?`, s, { tanyaBalik: true });
+      return say('Untuk kelas mana?', s, { tanyaBalik: true });
+    }
+    case 'WAKTU': {
+      const hari = HARI[now.getDay()]; const mnt = now.getHours() * 60 + now.getMinutes(); const p = jamKe(D, hari, mnt);
+      const jamStr = `Sekarang pukul ${fmt(mnt)}, hari ${hari}.`;
+      if (p.libur) return say(`${jamStr} Hari ini tidak ada pelajaran.`, null);
+      if (p.jeda) return say(`${jamStr} Sekarang waktu ${p.jeda.kegiatan.toLowerCase()} (${p.jeda.mulai}–${p.jeda.selesai}).`, null);
+      if (p.sebelum) return say(`${jamStr} Pelajaran belum dimulai; mulai pukul ${p.sebelum}.`, null);
+      if (p.sesudah) return say(`${jamStr} Kegiatan belajar hari ini sudah selesai.`, null);
+      return say(`${jamStr} Sekarang ${p.kegiatan ? p.kegiatan.toLowerCase() + ', ' : ''}jam ke-${p.jam} (${p.mulai}–${p.selesai}).`, { hari, jam: p.jam });
+    }
+    case 'JAM_SEKOLAH': {
+      const hari = s.hari || HARI[now.getDay()];
+      if (libur(hari)) return say(`Hari ${hari} tidak ada kegiatan belajar.`, { hari });
+      const sl = D.slot[hari]; const ks = Object.values(sl); const awal = Math.min(...ks.map(v => tmin(v.mulai)));
+      const akhir = Math.max(...ks.map(v => tmin(v.selesai)), ...(D.jeda[hari] || []).map(j => tmin(j.selesai)));
+      facts.push(fmt(awal), fmt(akhir));
+      return say(u.jenis === 'pulang' ? `Hari ${hari} siswa pulang pukul ${fmt(akhir)}.` : `Hari ${hari} siswa masuk pukul ${fmt(awal)}.`, { hari });
+    }
+    case 'SLOT': {
+      let hari = s.hari, jam = s.jam;
+      if (!hari) hari = HARI[now.getDay()];
+      if (libur(hari)) return say(`Hari ${hari} tidak ada pelajaran.`, { kelas: s.kelas, hari });
+      if (s.pukul !== undefined || (u.sekarang && jam === undefined) || s.sekarangGeser !== undefined) {
+        const mnt = s.pukul !== undefined ? s.pukul : now.getHours() * 60 + now.getMinutes();
+        const p = jamKe(D, hari, mnt);
+        if (p.jeda) return say(`Pada ${fmt(mnt)} hari ${hari} adalah waktu ${p.jeda.kegiatan.toLowerCase()} (${p.jeda.mulai}–${p.jeda.selesai}).`, { kelas: s.kelas, hari });
+        if (p.sebelum) return say(`Pelajaran hari ${hari} belum dimulai; mulai pukul ${p.sebelum}.`, { kelas: s.kelas, hari });
+        if (p.sesudah || p.libur) return say(`Kegiatan belajar hari ${hari} sudah selesai.`, { kelas: s.kelas, hari });
+        jam = p.jam + (s.sekarangGeser || 0);
+      }
+      const v = (D.slot[hari] || {})[jam];
+      if (!v) return say(`Hari ${hari} tidak ada jam ke-${jam}.`, { kelas: s.kelas, hari });
+      const asum = s.asumsiJam ? ' (saya anggap jam pelajaran ke-' + jam + ')' : '';
+      const r = D.jadwal.find(x => x.hari === hari && x.jam_ke === jam && x.kelas === s.kelas.kode);
+      facts.push(v.mulai, v.selesai, s.kelas.nama);
+      if (!r) return say(`Kelas ${s.kelas.nama} hari ${hari} ${slotText(D, hari, jam)}${asum}: ${v.kegiatan || 'tidak ada pelajaran'}.`, { kelas: s.kelas, hari, jam });
+      facts.push(D.mapel[r.mapel], namaGuru(D, r.guru));
+      const tg = tanggalHari(hari);
+      return say(`Kelas ${s.kelas.nama} hari ${hari} ${slotText(D, hari, jam)}${asum} belajar ${D.mapel[r.mapel]} bersama ${namaGuru(D, r.guru)}.` + catatanInfo(D, tg, { guru: r.guru, kelas: s.kelas.kode, jam }), { kelas: s.kelas, hari, jam, mapel: r.mapel });
+    }
+    case 'KELAS_HARI': {
+      const hari = s.hari || HARI[now.getDay()];
+      if (libur(hari)) return say(`Hari ${hari} tidak ada pelajaran.`, { kelas: s.kelas, hari });
+      const rs = D.jadwal.filter(x => x.hari === hari && x.kelas === s.kelas.kode).sort((a, b) => a.jam_ke - b.jam_ke);
+      const seg = []; for (const r of rs) { const L = seg[seg.length - 1]; if (L && L.mapel === r.mapel && L.guru === r.guru && L.b === r.jam_ke - 1) L.b = r.jam_ke; else seg.push({ mapel: r.mapel, guru: r.guru, a: r.jam_ke, b: r.jam_ke }); }
+      const kegiatan = Object.entries(D.slot[hari]).filter(([, v]) => v.kegiatan).map(([k, v]) => [+k, v]);
+      const parts = [];
+      if (kegiatan.length) { const a = Math.min(...kegiatan.map(x => x[0])), b = Math.max(...kegiatan.map(x => x[0])); parts.push(`jam ke-${a}${a !== b ? ' sampai ke-' + b : ''}: ${kegiatan[0][1].kegiatan}`); }
+      for (const g of seg) { parts.push(`jam ke-${g.a}${g.a !== g.b ? ' sampai ke-' + g.b : ''}: ${D.mapel[g.mapel]} (${namaGuru(D, g.guru)})`); facts.push(D.mapel[g.mapel], namaGuru(D, g.guru)); }
+      const tg = tanggalHari(hari); const notes = seg.map(g => catatanInfo(D, tg, { guru: g.guru, kelas: s.kelas.kode })).filter(Boolean);
+      return say(`Jadwal kelas ${s.kelas.nama} hari ${hari}: ${parts.join('; ')}.` + [...new Set(notes)].join(''), { kelas: s.kelas, hari });
+    }
+    case 'MAPEL_HARI': {
+      const rs = D.jadwal.filter(x => x.hari === s.hari && x.kelas === s.kelas.kode && x.mapel === s.mapel).sort((a, b) => a.jam_ke - b.jam_ke);
+      if (!rs.length) return say(`Kelas ${s.kelas.nama} tidak ada ${D.mapel[s.mapel]} hari ${s.hari}.`, { kelas: s.kelas, hari: s.hari, mapel: s.mapel });
+      facts.push(namaGuru(D, rs[0].guru));
+      return say(`Ya, kelas ${s.kelas.nama} belajar ${D.mapel[s.mapel]} hari ${s.hari} jam ke-${rs.map(r => r.jam_ke).join(', ')} bersama ${namaGuru(D, rs[0].guru)}.`, { kelas: s.kelas, hari: s.hari, mapel: s.mapel });
+    }
+    case 'MAPEL_KAPAN': {
+      const rs = D.jadwal.filter(x => x.kelas === s.kelas.kode && x.mapel === s.mapel);
+      if (!rs.length) return say(`Kelas ${s.kelas.nama} tidak memiliki jadwal ${D.mapel[s.mapel]}.`, { kelas: s.kelas, mapel: s.mapel });
+      const byH = {}; for (const r of rs) (byH[r.hari] ||= []).push(r.jam_ke);
+      const urut = HARI.filter(h => byH[h]).map(h => `${h} jam ke-${byH[h].sort((a, b) => a - b).join(', ')}`);
+      facts.push(namaGuru(D, rs[0].guru));
+      return say(`Kelas ${s.kelas.nama} belajar ${D.mapel[s.mapel]} hari ${urut.join('; ')}, bersama ${[...new Set(rs.map(r => namaGuru(D, r.guru)))].join(' dan ')}.`, { kelas: s.kelas, mapel: s.mapel });
+    }
+    case 'GURU_MAPEL_KELAS': {
+      const gs = [...new Set(D.jadwal.filter(x => x.kelas === s.kelas.kode && x.mapel === s.mapel).map(x => x.guru))];
+      if (!gs.length) return say(`Kelas ${s.kelas.nama} tidak memiliki jadwal ${D.mapel[s.mapel]}.`, { kelas: s.kelas, mapel: s.mapel });
+      gs.forEach(g => facts.push(namaGuru(D, g)));
+      return say(`Guru ${D.mapel[s.mapel]} kelas ${s.kelas.nama} adalah ${gs.map(g => namaGuru(D, g)).join(' dan ')}.`, { kelas: s.kelas, mapel: s.mapel });
+    }
+    case 'GURU_MAPEL': {
+      const by = {}; for (const r of D.jadwal.filter(x => x.mapel === s.mapel)) (by[r.guru] ||= new Set()).add(r.kelas);
+      const parts = Object.entries(by).map(([g, ks]) => { facts.push(namaGuru(D, +g)); return `${namaGuru(D, +g)} (${D.kelas.filter(k => ks.has(k.kode)).map(k => k.nama).join(', ')})`; });
+      return say(`Guru ${D.mapel[s.mapel]}: ${parts.join('; ')}.`, { mapel: s.mapel });
+    }
+    case 'GURU_PROFIL': {
+      const rs = D.jadwal.filter(x => x.guru === s.guru.kode);
+      if (!rs.length) return say(`${s.guru.nama} tidak memiliki jadwal mengajar di roster semester ini.`, { guru: s.guru });
+      const by = {}; for (const r of rs) (by[r.mapel] ||= new Set()).add(r.kelas);
+      facts.push(s.guru.nama);
+      return say(`${s.guru.nama} mengajar ${Object.entries(by).map(([m, ks]) => `${D.mapel[m]} di kelas ${D.kelas.filter(k => ks.has(k.kode)).map(k => k.nama).join(', ')}`).join('; ')}.`, { guru: s.guru });
+    }
+    case 'GURU_JADWAL': {
+      const hari = s.hari || HARI[now.getDay()];
+      if (libur(hari)) return say(`Hari ${hari} tidak ada pelajaran.`, { guru: s.guru, hari });
+      let jam = s.jam;
+      if (jam === undefined && (u.sekarang || s.pukul !== undefined || (!s.hari && /di ?mana|lagi/.test(u.t)))) {
+        const mnt = s.pukul !== undefined ? s.pukul : now.getHours() * 60 + now.getMinutes(); const p = jamKe(D, hari, mnt);
+        if (p.jam === undefined) return say(`Saat ini bukan jam pelajaran, jadi menurut roster ${s.guru.nama} tidak sedang mengajar. Untuk memastikan keberadaan beliau, silakan tanyakan ke ruang guru.`, { guru: s.guru, hari });
+        jam = p.jam;
+      }
+      facts.push(s.guru.nama);
+      const tg = tanggalHari(hari); const note = catatanInfo(D, tg, { guru: s.guru });
+      if (jam !== undefined) {
+        const r = D.jadwal.find(x => x.hari === hari && x.jam_ke === jam && x.guru === s.guru.kode);
+        if (!r) return say(`Menurut roster, ${s.guru.nama} tidak mengajar pada hari ${hari} ${slotText(D, hari, jam)}.` + note, { guru: s.guru, hari, jam });
+        const k = D.kelas.find(x => x.kode === r.kelas); facts.push(k.nama, D.mapel[r.mapel]);
+        return say(`Menurut roster, hari ${hari} ${slotText(D, hari, jam)} ${s.guru.nama} mengajar ${D.mapel[r.mapel]} di kelas ${k.nama}.` + note, { guru: s.guru, hari, jam });
+      }
+      const rs = D.jadwal.filter(x => x.hari === hari && x.guru === s.guru.kode).sort((a, b) => a.jam_ke - b.jam_ke);
+      if (!rs.length) return say(`Menurut roster, ${s.guru.nama} tidak mengajar hari ${hari}.` + note, { guru: s.guru, hari });
+      const seg = []; for (const r of rs) { const L = seg[seg.length - 1]; if (L && L.kelas === r.kelas && L.b === r.jam_ke - 1) L.b = r.jam_ke; else seg.push({ kelas: r.kelas, mapel: r.mapel, a: r.jam_ke, b: r.jam_ke }); }
+      return say(`Hari ${hari}, ${s.guru.nama} mengajar ${seg.map(g => `jam ke-${g.a}${g.a !== g.b ? ' sampai ke-' + g.b : ''} di kelas ${D.kelas.find(k => k.kode === g.kelas).nama}`).join('; ')}.` + note, { guru: s.guru, hari });
+    }
+    case 'GURU_HADIR': {
+      const ih = infoHari(D, now).filter(i => i.jenis === 'guru_berhalangan' && +i.guru === s.guru.kode);
+      facts.push(s.guru.nama);
+      if (ih.length) return say(`Hari ini ${s.guru.nama} berhalangan${ih[0].isi ? ' (' + ih[0].isi + ')' : ''}.`, { guru: s.guru });
+      return say(`Tidak ada info bahwa ${s.guru.nama} berhalangan hari ini. Untuk memastikan, silakan tanyakan ke ruang guru.`, { guru: s.guru });
+    }
+    case 'LAYANAN': { const l = u.layanan; facts.push(l.ruang, l.jam_layanan);
+      return say(`Untuk ${l.urusan}: ${l.syarat ? 'bawa ' + l.syarat + '. ' : ''}${l.langkah}. Silakan ke ${l.ruang}, dilayani ${l.petugas}, pukul ${l.jam_layanan}.`, null); }
+    case 'FAQ': return say(u.faq.jawaban, null);
+    default: return say(null, null, { needsLLM: true });
+  }
+}
+
+// ---------- sesi ----------
+class Sesi {
+  constructor(opt = {}) { this.mode = opt.mode || 'kata'; this.hening = opt.heningMs ?? 10000; this.keluarZona = opt.keluarZonaMs ?? 5000; this.masukZona = opt.masukZonaMs ?? 1000; this.reset(); this.state = 'SIAGA'; this.id = 0; this.zonaSejak = null; this.keluarSejak = null; }
+  reset() { this.ctx = { topik: null, nama: null }; }
+  buka(t) { this.state = 'PERCAKAPAN'; this.id++; this.reset(); this.last = t; return { aksi: 'buka', sesi: this.id }; }
+  tutup() { this.state = 'SIAGA'; this.reset(); return { aksi: 'tutup' }; }
+  tombol(t) { if (this.state === 'PERCAKAPAN') this.tutup(); return this.buka(t); }
+  sensor(jarakCm, t, batasCm = 60) {
+    if (this.mode === 'kata') return null;
+    const di = jarakCm > 0 && jarakCm <= batasCm;
+    if (di) { this.keluarSejak = null; if (this.zonaSejak === null) this.zonaSejak = t; if (this.state === 'SIAGA' && t - this.zonaSejak >= this.masukZona) return { ...this.buka(t), sapa: true }; }
+    else { this.zonaSejak = null; if (this.state === 'PERCAKAPAN') { if (this.keluarSejak === null) this.keluarSejak = t; if (t - this.keluarSejak >= this.keluarZona) return this.tutup(); } }
+    return null;
+  }
+  tick(t) { if (this.state === 'PERCAKAPAN' && t - this.last >= this.hening) return this.tutup(); return null; }
+  dengar(text, t) {
+    const n = norm(text);
+    if (this.state === 'SIAGA') {
+      if (this.mode === 'zona') return { aksi: 'abaikan' };
+      if (!WAKE.test(n)) return { aksi: 'abaikan' };
+      if (isTutup(n.replace(WAKE, ' ')) && !/\?|\b(apa|siapa|kapan|berapa|dimana|di mana)\b/.test(n)) return { aksi: 'abaikan' };
+      const r = this.buka(t); const sisa = n.replace(WAKE, ' ').replace(SALAM, ' ').trim();
+      return sisa.split(' ').filter(Boolean).length >= 2 ? { ...r, teks: sisa } : r;
+    }
+    if (WAKE.test(n) && SALAM.test(n)) { this.tutup(); const r = this.buka(t); const sisa = n.replace(WAKE, ' ').replace(SALAM, ' ').trim(); return sisa.split(' ').filter(Boolean).length >= 2 ? { ...r, teks: sisa, sesiBaru: true } : { ...r, sesiBaru: true }; }
+    this.last = t; return { aksi: 'jawab', teks: n.replace(WAKE, ' ').trim() };
+  }
+}
+
+// ---------- pemeriksa jawaban (untuk jawaban dari model) ----------
+function periksa(jawaban, dataTeks, D) {
+  const pel = []; const j = String(jawaban); const data = String(dataTeks);
+  for (const m of j.matchAll(/\b(\d{1,2})[.:](\d{2})\b/g)) { const a = `${m[1].padStart(2, '0')}.${m[2]}`; if (!data.includes(a) && !data.includes(`${m[1]}.${m[2]}`)) pel.push(`waktu ${a} tidak ada di data`); }
+  const jn = norm(j), dn = norm(data);
+  for (const g of Object.values(D.guru)) { const kunci = g.tokens.filter(t => t.length >= 5); if (kunci.some(t => new RegExp(`\\b${t}\\b`).test(jn)) && !kunci.some(t => new RegExp(`\\b${t}\\b`).test(dn))) pel.push(`nama ${g.nama} tidak ada di data`); }
+  for (const k of D.kelas) { if (k.alias.some(a => a.length >= 4 && new RegExp(`(^|\\s)${a.replace(/\+/g, '\\+')}(\\s|$)`).test(jn)) && !k.alias.some(a => new RegExp(`(^|\\s)${a.replace(/\+/g, '\\+')}(\\s|$)`).test(dn))) pel.push(`kelas ${k.nama} tidak ada di data`); }
+  for (const m of j.replace(/\b\d{1,2}[.:]\d{2}\b/g, ' ').matchAll(/\b\d+\b/g)) if (!new RegExp(`\\b${m[0]}\\b`).test(data)) pel.push(`angka ${m[0]} tidak ada di data`);
+  return { ok: pel.length === 0, pelanggaran: pel };
+}
+
+// ---------- saringan privasi ----------
+const POLA_PRIBADI = [
+  ['NIK', /\b\d{16}\b/], ['nomor HP', /(?:\+62|\b62|\b0)8\d{2}[\s-]?\d{3,4}[\s-]?\d{3,5}\b/], ['email', /\b[\w.+-]+@[\w-]+\.[\w.]+\b/],
+  ['alamat', /\b(jl|jln|jalan|lorong|dusun)\.?\s+[a-z]/i], ['alamat', /\brt\s*\.?\s*\d+\s*\/?\s*rw\s*\.?\s*\d+/i],
+  ['tanggal lahir', /\b(tanggal lahir|tgl\.? lahir|ttl)\b/i], ['NISN', /\bnisn\b[\s:]*\d{6,}/i]
+];
+const KOLOM_PRIBADI = /^(nik|nisn|nis|no\.?\s*(hp|telp|telepon|wa)|nomor\s*(hp|telepon|wa)|telepon|hp|whatsapp|alamat|email|tanggal lahir|tgl\.? lahir|ttl|tempat.*lahir|nilai|skor|rapor|nama (ibu|ayah)|penghasilan|agama|kk|no\.? kk|pelanggaran)\b/i;
+function cekTeks(teks) { const f = []; for (const [jenis, re] of POLA_PRIBADI) if (re.test(teks)) f.push(jenis); return [...new Set(f)]; }
+function cekTabel(header) { return header.filter(h => KOLOM_PRIBADI.test(String(h).trim())); }
+const TOPIK_SENSITIF = /\b(sakit|penyakit|obat|rumah sakit|dokter|cerai|bercerai|bertengkar|dipukul|dimarahi|utang|hutang|miskin|gaji|agama|partai|pacar|pacaran|bunuh|depresi|sedih sekali|dirundung|di-bully|dibully|berkelahi|polisi|ditangkap)\b/i;
+
+// ---------- catatan teman (lokal di kios, opsional) ----------
+class Teman {
+  constructor(opt = {}) { this.aktif = !!opt.aktif; this.simpan = new Map(); this.retensiHari = opt.retensiHari ?? 365; }
+  kunci(n) { return norm(n).trim(); }
+  sapa(nama) { if (!this.aktif) return { teks: `Halo, ${nama}!`, kenal: false }; const c = this.simpan.get(this.kunci(nama)); return { teks: c ? `Halo, ${nama}! Senang ketemu lagi.` : `Halo, ${nama}! Senang berkenalan.`, kenal: !!c, gaya: c ? c.gaya : null }; }
+  sambung(nama, ucapan) { // hanya topik yang disebut sendiri oleh penanya
+    if (!this.aktif) return []; const c = this.simpan.get(this.kunci(nama)); if (!c) return [];
+    const u = norm(ucapan); return c.topik.filter(tp => tokens(tp).some(w => w.length >= 4 && u.includes(` ${w} `)));
+  }
+  akhirSesi(nama, ringkas, t) {
+    if (!this.aktif || !nama) return { disimpan: false };
+    const bersih = x => !cekTeks(x).length && !TOPIK_SENSITIF.test(x);
+    const k = this.kunci(nama); const c = this.simpan.get(k) || { nama, peran: null, minat: [], topik: [], gaya: null };
+    if (ringkas.peran && ['siswa', 'guru', 'orang tua', 'tamu'].includes(ringkas.peran)) c.peran = ringkas.peran;
+    for (const m of ringkas.minat || []) if (bersih(m) && !c.minat.includes(m)) c.minat.push(m);
+    for (const tp of ringkas.topik || []) if (bersih(tp)) c.topik.push(tp);
+    c.topik = c.topik.slice(-5); if (ringkas.gaya && bersih(ringkas.gaya)) c.gaya = ringkas.gaya; c.terakhir = t;
+    this.simpan.set(k, c); return { disimpan: true, catatan: c };
+  }
+  lupakan(nama) { return this.simpan.delete(this.kunci(nama)); }
+  bersihkan(t) { let n = 0; for (const [k, c] of this.simpan) if (t - c.terakhir > this.retensiHari * 864e5) { this.simpan.delete(k); n++; } return n; }
+}
+
+// ---------- satu pintu: kios memanggil ini untuk setiap ucapan dalam sesi ----------
+function proses(teks, sesi, now, D, opt = {}) {
+  const u = understand(teks, sesi.ctx, now, D);
+  if (u.intent === 'LLM' && opt.offline) return { intent: 'LLM_OFFLINE', text: 'Maaf, untuk pertanyaan itu saya belum bisa menjawab saat ini. Saya bisa membantu soal jadwal, guru, dan jam sekolah.', facts: [] };
+  const a = answer(u, sesi.ctx, now, D);
+  if (a.topik) sesi.ctx.topik = Object.fromEntries(Object.entries(a.topik).filter(([, v]) => v !== undefined)); // topik diganti, tidak digabung
+  if (a.aksi === 'tutup') sesi.tutup();
+  return a;
+}
+
+module.exports = { cariKelas, cariGuru, cariJam, tglLokal, norm, buildData, validate, understand, answer, proses, Sesi, periksa, cekTeks, cekTabel, Teman, HARI, WAKE, TUTUP };
+
+__m['./core.js']=module.exports;})();
+(function(){var module={exports:{}},exports=module.exports,require=function(n){return __m[n]};
+// Format Baku ROBI — prompt baku untuk AI luar, pembaca format, pemeriksaan silang, dan uji balik.
+// Prinsip: AI luar membaca dokumen; ROBI membaca hasilnya dengan aturan pasti (tanpa model AI), lalu menunjukkan balik pemahamannya.
+'use strict';
+const C = require('./core.js');
+const HARI_ID = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+const BULAN_ID = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+const JENIS_DOK = ['surat edaran', 'surat keputusan', 'surat', 'kalender pendidikan', 'regulasi', 'pengumuman', 'gambar', 'video', 'lainnya'];
+const JENIS_TGL = ['libur', 'ujian', 'kegiatan', 'hari efektif', 'batas waktu', 'lainnya'];
+const LABEL = ['JENIS', 'KATEGORI_USULAN', 'JUDUL', 'PENERBIT', 'NOMOR', 'TANGGAL_DOKUMEN', 'BERLAKU_MULAI', 'BERLAKU_SAMPAI', 'CAKUPAN', 'RINGKASAN'];
+const BAGIAN = ['TANGGAL PENTING', 'KETENTUAN', 'RAGU', 'DATA PRIBADI'];
+const BAGIAN_OPSI = ['PERTANYAAN ANTISIPASI'];
+const VERSI = 'v1';
+const tglObj = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+const tglTeks = s => { const d = tglObj(s); return `${HARI_ID[d.getDay()]}, ${d.getDate()} ${BULAN_ID[d.getMonth()]} ${d.getFullYear()}`; };
+const normHari = h => String(h || '').trim().toLowerCase().replace(/['’`]/g, '');
+
+// ---------------- PROMPT BAKU ----------------
+// konteks: { sekolah, hariIni (Date), tahunAjaran, book (Buku Data, untuk roster dan cakupan) }
+function buatPrompt(jenis, konteks) {
+  const hari = konteks.hariIni ? tglLokal(konteks.hariIni) : '';
+  const kepala = `Anda membantu memasukkan data ke ROBI, asisten suara ${konteks.sekolah || 'sekolah'}. Hari ini ${hari ? tglTeks(hari) : '-'}${konteks.tahunAjaran ? ', tahun ajaran ' + konteks.tahunAjaran : ''}.
+Baca dokumen/berkas yang saya lampirkan dengan teliti, lalu keluarkan HANYA blok format di bawah, tanpa kalimat pembuka atau penutup, tanpa tabel markdown, tanpa huruf tebal.
+
+ATURAN WAJIB:
+1. Jangan menebak. Bila ada bagian yang tidak terbaca, terpotong, atau meragukan, tulis di bagian RAGU. Lebih baik ditandai ragu daripada salah.
+2. Semua tanggal ditulis YYYY-MM-DD lalu nama hari dalam kurung, contoh: 2026-12-24 (Kamis). Hitung nama hari dengan benar.
+3. Jangan mengubah, menambah, atau menghapus label. Isi label yang tidak ada di dokumen dengan: TIDAK ADA.
+4. Jangan menyalin data pribadi (NIK, NIP, nomor HP pribadi, alamat rumah, data siswa). Bila dokumen memuatnya, tulis jenisnya saja di bagian DATA PRIBADI.
+5. Sertakan nomor halaman sumber (hal. n) untuk setiap tanggal penting dan ketentuan, bila dokumen berhalaman.`;
+  const kartu = (petunjukJenis, petunjukTgl, tambahan = '') => `${kepala}
+6. KATEGORI_USULAN diisi "data pokok" bila dokumen mengubah pola/standar (kalender, jadwal, aturan tetap), atau "informasi terkini" bila pengecualian sesaat (libur satu hari, pulang cepat).
+7. Bagian TANGGAL PENTING: ${petunjukTgl}${tambahan}
+8. Bagian KETENTUAN: satu ketentuan per baris, diawali tanda "- ", diakhiri (hal. n).
+9. Bila sebuah label punya pilihan (dipisah "/"), tulis SATU pilihan saja.
+10. Bagian PERTANYAAN ANTISIPASI: 5 sampai 15 pertanyaan yang paling mungkin diajukan siswa, orang tua, atau tamu tentang dokumen ini, masing-masing satu baris "T: pertanyaan | J: jawaban". Jawaban hanya dari isi dokumen, singkat, menyebut dasarnya, dan tanggal ditulis seperti "24 Desember 2026".
+
+FORMAT:
+=== KARTU DATA ROBI ${VERSI} ===
+JENIS: ${petunjukJenis}
+KATEGORI_USULAN: data pokok / informasi terkini
+JUDUL: judul singkat
+PENERBIT: nama lembaga penerbit
+NOMOR: nomor dokumen, atau TIDAK ADA
+TANGGAL_DOKUMEN: YYYY-MM-DD (Hari), atau TIDAK ADA
+BERLAKU_MULAI: YYYY-MM-DD (Hari)
+BERLAKU_SAMPAI: YYYY-MM-DD (Hari), atau TIDAK ADA
+CAKUPAN: semua kelas / tingkat tertentu / kelas tertentu / guru tertentu (sebutkan)
+RINGKASAN: satu paragraf, maksimal 80 kata, bahasa Indonesia sederhana
+--- TANGGAL PENTING ---
+YYYY-MM-DD (Hari) | YYYY-MM-DD (Hari) | jenis | keterangan | hal. n
+--- KETENTUAN ---
+- ketentuan (hal. n)
+--- RAGU ---
+- bagian yang ragu dan alasannya, atau TIDAK ADA
+--- DATA PRIBADI ---
+TIDAK, atau YA: jenis data pribadi yang ditemukan
+--- PERTANYAAN ANTISIPASI ---
+T: pertanyaan | J: jawaban
+=== AKHIR KARTU ===`;
+  const barisTgl = 'satu baris per tanggal atau rentang, urutan: tanggal mulai | tanggal selesai | jenis | keterangan | halaman. Jenis salah satu dari: libur, ujian, kegiatan, hari efektif, batas waktu, lainnya. Untuk satu hari, tanggal mulai dan selesai sama. Contoh: 2026-12-21 (Senin) | 2027-01-02 (Sabtu) | libur | Libur semester ganjil | hal. 2. Tulis TIDAK ADA bila tidak ada tanggal penting.';
+  if (jenis === 'dokumen') return kartu('surat edaran / surat keputusan / surat / regulasi / pengumuman / gambar / lainnya', barisTgl);
+  if (jenis === 'kalender') return kartu('kalender pendidikan', barisTgl, ' KHUSUS KALENDER: tulis SEMUA baris kegiatan dan libur tanpa diringkas, berurutan menurut tanggal.');
+  if (jenis === 'video') return kartu('video', barisTgl).replace('RINGKASAN: satu paragraf', 'RINGKASAN: isi video dalam satu paragraf; bila Anda tidak dapat menonton isi video, tulis TIDAK DAPAT DIBACA dan isi RAGU').replace('NOMOR: nomor dokumen, atau TIDAK ADA', 'NOMOR: TIDAK ADA');
+  if (jenis === 'roster') {
+    const b = konteks.book; if (!b) throw new Error('Prompt roster butuh Buku Data');
+    const kelas = b.Kelas.map(k => `${k.kode} = ${k.nama}`).join('; ');
+    const mapel = b.Kode_Mapel.map(m => `${m.kode} = ${m.nama}`).join('; ');
+    const guru = b.Kode_Guru.map(g => `${g.kode} = ${g.nama}`).join('; ');
+    const jam = [...new Set(b.Jam_Pelajaran.filter(slotAjar).map(j => j.hari))].map(h => `${h}: jam ke ${b.Jam_Pelajaran.filter(j => j.hari === h && slotAjar(j)).map(j => j.jam_ke).join(',')}`).join('; ');
+    const keg = b.Jam_Pelajaran.filter(j => j.jam_ke !== null && j.jam_ke > 0 && j.kegiatan).map(j => `${j.hari} jam ke ${j.jam_ke} (${j.kegiatan})`).join('; ');
+    return `${kepala}
+
+Ubah roster yang saya lampirkan menjadi tabel kode. Setiap sel berisi KODE MAPEL diikuti KODE GURU, contoh H29 (mapel H, guru 29). Pakai hanya kode di daftar ini:
+KELAS: ${kelas}
+MAPEL: ${mapel}
+GURU: ${guru}
+JAM PELAJARAN YANG DIISI ROSTER: ${jam}
+JAM KEGIATAN (JANGAN dimasukkan ke tabel): ${keg || 'tidak ada'}
+Bila nama guru atau mapel di roster tidak cocok dengan daftar, JANGAN menebak kode: isi sel dengan ?? dan jelaskan di RAGU.
+
+FORMAT:
+=== ROSTER ROBI ${VERSI} ===
+BERLAKU_MULAI: YYYY-MM-DD (Hari)
+DASAR: nomor/judul SK roster | TIDAK ADA
+HARI;JAM_KE;${b.Kelas.map(k => k.kode).join(';')}
+satu baris per hari dan jam ke, contoh: Senin;2;H29;D24;…
+--- RAGU ---
+- … | TIDAK ADA
+=== AKHIR ROSTER ===`;
+  }
+  throw new Error('Jenis prompt tidak dikenal: ' + jenis);
+}
+const tglLokal = C.tglLokal;
+const slotAjar = j => j.jam_ke !== null && j.jam_ke > 0 && !j.kegiatan; // jam kegiatan (upacara, materi agama) tidak masuk roster
+
+// ---------------- PEMBACA ----------------
+function ambilBlok(teks, awal, akhir) {
+  const t = String(teks || '').replace(/\r/g, '').replace(/```[a-z]*\n?/gi, '').replace(/\*\*/g, '');
+  const re = new RegExp(`===\\s*${awal}\\s+(v\\d+)\\s*===([\\s\\S]*?)===\\s*${akhir}\\s*===`, 'gi');
+  const m = [...t.matchAll(re)];
+  return m;
+}
+function bacaTanggal(v, label, err, wajib = true) {
+  const s = String(v || '').trim();
+  if (!s || /^tidak ada$/i.test(s)) { if (wajib) err.push(`${label} wajib diisi tanggal`); return null; }
+  const m = /^(\d{4})-(\d{2})-(\d{2})\s*(?:\(([^)]+)\))?$/.exec(s);
+  if (!m) { err.push(`${label}: format "${s}" tidak sah (harus YYYY-MM-DD (Hari))`); return null; }
+  const iso = `${m[1]}-${m[2]}-${m[3]}`; const d = tglObj(iso);
+  if (d.getFullYear() !== +m[1] || d.getMonth() + 1 !== +m[2] || d.getDate() !== +m[3]) { err.push(`${label}: tanggal ${iso} tidak ada di kalender`); return null; }
+  if (!m[4]) err.push(`${label}: nama hari wajib ditulis, contoh ${iso} (${HARI_ID[d.getDay()]})`);
+  else if (normHari(m[4]) !== normHari(HARI_ID[d.getDay()])) err.push(`${label}: tertulis ${m[4]}, padahal ${iso} adalah hari ${HARI_ID[d.getDay()]}. Periksa dokumen asli`);
+  return iso;
+}
+function urai(teks, awal = 'KARTU DATA ROBI', akhir = 'AKHIR KARTU', sebagian = false) {
+  const err = [];
+  const blok = ambilBlok(teks, awal, akhir);
+  if (!blok.length) return { ok: false, err: [`Format Baku tidak ditemukan. Pastikan hasil AI diawali "=== ${awal} ${VERSI} ===" dan diakhiri "=== ${akhir} ==="`] };
+  if (blok.length > 1) return { ok: false, err: ['Ada lebih dari satu blok. Masukkan satu blok per input'] };
+  if (blok[0][1].toLowerCase() !== VERSI) err.push(`Versi format ${blok[0][1]} tidak dikenal (harus ${VERSI})`);
+  const f = {}; const bag = {}; let cur = null;
+  for (const raw of blok[0][2].split('\n')) {
+    const line = raw.trim(); if (!line) continue;
+    const mb = /^---\s*(.+?)\s*---$/.exec(line);
+    if (mb) { cur = mb[1].toUpperCase(); if (![...BAGIAN, ...BAGIAN_OPSI].includes(cur)) err.push(`Bagian "${mb[1]}" tidak dikenal`); else if (bag[cur]) err.push(`Bagian ${cur} muncul dua kali`); bag[cur] = []; continue; }
+    if (cur) { bag[cur].push(line); continue; }
+    const ml = /^([A-Z_]+)\s*:\s*(.*)$/.exec(line);
+    if (ml && LABEL.includes(ml[1])) { if (ml[1] in f) err.push(`Label ${ml[1]} muncul dua kali`); f[ml[1]] = ml[2].trim(); }
+    else if (ml) err.push(`Label "${ml[1]}" tidak dikenal`);
+    else if (f.RINGKASAN !== undefined && !cur) f.RINGKASAN += ' ' + line;
+    else err.push(`Baris tidak dikenali: "${line.slice(0, 60)}"`);
+  }
+  return err.length ? { ok: false, err } : { ok: true, mentah: { f, bag } };
+}
+function baca(teks) { const u = urai(teks); return u.ok ? tafsir(u.mentah) : u; }
+function tafsir(mentah) {
+  const err = []; const f = mentah.f, bag = mentah.bag;
+  for (const l of LABEL) if (!(l in f) || f[l] === '') err.push(`Label ${l} tidak ada atau kosong`);
+  for (const b of BAGIAN) if (!bag[b]) err.push(`Bagian --- ${b} --- tidak ada`);
+  if (err.length) return { ok: false, err };
+  const k = { versi: VERSI };
+  k.jenis = f.JENIS.toLowerCase().trim(); if (!JENIS_DOK.includes(k.jenis)) err.push(`JENIS "${f.JENIS}" tidak dikenal`);
+  const kat = f.KATEGORI_USULAN.toLowerCase().trim(); if (!['data pokok', 'informasi terkini'].includes(kat)) err.push(`KATEGORI_USULAN harus "data pokok" atau "informasi terkini"`); k.kategori = kat;
+  k.judul = f.JUDUL; k.penerbit = f.PENERBIT; k.nomor = /^tidak ada$/i.test(f.NOMOR) ? null : f.NOMOR; k.cakupan = f.CAKUPAN; k.ringkasan = f.RINGKASAN.trim();
+  if (/^tidak ada$/i.test(k.penerbit)) err.push('PENERBIT wajib diisi');
+  k.tanggalDokumen = bacaTanggal(f.TANGGAL_DOKUMEN, 'TANGGAL_DOKUMEN', err, false);
+  k.mulai = bacaTanggal(f.BERLAKU_MULAI, 'BERLAKU_MULAI', err, true);
+  k.sampai = bacaTanggal(f.BERLAKU_SAMPAI, 'BERLAKU_SAMPAI', err, false);
+  k.tanggalPenting = [];
+  const tp = bag['TANGGAL PENTING'].filter(x => !/^tidak ada$/i.test(x) && !/^(mulai\s*\||YYYY-MM-DD)/i.test(x)); // baris kepala/contoh yang tersalin diabaikan
+  tp.forEach((row, i) => {
+    const p = row.split('|').map(s => s.trim()); const lbl = `TANGGAL PENTING baris ${i + 1}`;
+    if (p.length < 4) return err.push(`${lbl}: harus "mulai | selesai | jenis | keterangan | hal"`);
+    const e1 = [], mulai = bacaTanggal(p[0], lbl + ' (mulai)', e1), selesai = bacaTanggal(p[1], lbl + ' (selesai)', e1); err.push(...e1);
+    const jenis = p[2].toLowerCase(); if (!JENIS_TGL.includes(jenis)) err.push(`${lbl}: jenis "${p[2]}" tidak dikenal`);
+    if (!p[3]) err.push(`${lbl}: keterangan kosong`);
+    k.tanggalPenting.push({ mulai, selesai, jenis, keterangan: p[3], hal: p[4] || '' });
+  });
+  k.ketentuan = bag.KETENTUAN.filter(x => !/^tidak ada$/i.test(x) && !/^-\s*ketentuan \(hal\. n\)$/i.test(x)).map(x => x.replace(/^[-•*]\s*/, ''));
+  k.ragu = bag.RAGU.map(x => x.replace(/^[-•*]\s*/, '')).filter(x => x && !/^tidak ada$/i.test(x));
+  const dp = bag['DATA PRIBADI'].join(' ').trim();
+  if (/^tidak$/i.test(dp)) k.dataPribadi = null; else if (/^ya\b/i.test(dp)) k.dataPribadi = dp.replace(/^ya\s*:?\s*/i, '') || 'tidak disebut'; else err.push('DATA PRIBADI harus TIDAK atau YA: jenisnya');
+  k.antisipasi = [];
+  for (const [i, x] of (bag['PERTANYAAN ANTISIPASI'] || []).entries()) {
+    if (/^T:\s*pertanyaan\s*\|\s*J:\s*jawaban$/i.test(x) || /^tidak ada$/i.test(x)) continue; // baris contoh tersalin
+    const m = /^T:\s*(.+?)\s*\|\s*J:\s*(.+)$/i.exec(x);
+    if (!m) err.push(`PERTANYAAN ANTISIPASI baris ${i + 1}: harus "T: pertanyaan | J: jawaban"`); else k.antisipasi.push({ tanya: m[1], jawab: m[2] });
+  }
+  return err.length ? { ok: false, err } : { ok: true, kartu: k };
+}
+
+// ---------------- PEMERIKSAAN SILANG ----------------
+// hasil: blokir = harus diperbaiki/diputuskan sebelum bisa disimpan; peringatan = perlu dilihat
+function periksa(k, konteks = {}) {
+  const blokir = [], peringatan = [];
+  if (k.sampai && k.mulai && k.sampai < k.mulai) blokir.push('BERLAKU_SAMPAI lebih awal dari BERLAKU_MULAI');
+  if (k.tanggalDokumen && k.mulai && k.mulai < k.tanggalDokumen) peringatan.push('BERLAKU_MULAI lebih awal dari TANGGAL_DOKUMEN (berlaku surut). Pastikan memang demikian');
+  if (k.kategori === 'informasi terkini' && !k.sampai) blokir.push('Informasi terkini wajib punya BERLAKU_SAMPAI');
+  if (k.kategori === 'data pokok' && !k.sampai) peringatan.push('Data pokok tanpa BERLAKU_SAMPAI: akan ditinjau ulang setiap 12 bulan');
+  for (const [i, t] of k.tanggalPenting.entries()) {
+    const n = `Tanggal penting ${i + 1} (${t.keterangan})`;
+    if (t.selesai < t.mulai) blokir.push(`${n}: selesai lebih awal dari mulai`);
+    if (k.mulai && t.mulai < k.mulai) blokir.push(`${n}: ${t.mulai} sebelum masa berlaku dokumen (${k.mulai})`);
+    if (k.sampai && t.selesai > k.sampai) blokir.push(`${n}: ${t.selesai} sesudah masa berlaku dokumen (${k.sampai})`);
+    if (t.jenis === 'hari efektif' && t.mulai === t.selesai && tglObj(t.mulai).getDay() === 0) blokir.push(`${n}: hari Minggu tercatat sebagai hari efektif`);
+  }
+  // libur dan hari efektif bertumpuk
+  const L = k.tanggalPenting.filter(t => t.jenis === 'libur'), E = k.tanggalPenting.filter(t => t.jenis === 'hari efektif');
+  for (const a of L) for (const b of E) if (a.mulai <= b.selesai && b.mulai <= a.selesai) blokir.push(`"${a.keterangan}" (libur) bertumpuk dengan "${b.keterangan}" (hari efektif)`);
+  if (k.jenis === 'kalender pendidikan' && !k.tanggalPenting.length) blokir.push('Kalender pendidikan tanpa satu pun baris tanggal');
+  if (k.jenis === 'kalender pendidikan' && !k.sampai) blokir.push('Kalender pendidikan wajib punya BERLAKU_SAMPAI');
+  if (k.jenis === 'video' && /tidak dapat dibaca/i.test(k.ringkasan)) blokir.push('AI tidak dapat membaca isi video: tulis ringkasan secara manual');
+  if (k.ragu.length) blokir.push(...k.ragu.map(r => 'AI ragu: ' + r + ' — cocokkan dengan dokumen asli dan perbaiki'));
+  if (k.dataPribadi) blokir.push(`Dokumen memuat data pribadi (${k.dataPribadi}). Pastikan tidak ikut tersimpan dan lampiran ditandai internal`);
+  const pola = C.cekTeks([k.judul, k.ringkasan, ...k.ketentuan, ...k.tanggalPenting.map(t => t.keterangan)].join(' ')); if (pola.length) blokir.push(`Teks kartu memuat pola data pribadi: ${pola.join(', ')}`);
+  const boleh = iso => [k.mulai, k.sampai, k.tanggalDokumen].includes(iso) || k.tanggalPenting.some(t => t.mulai <= iso && iso <= t.selesai);
+  for (const [i, a] of (k.antisipasi || []).entries()) {
+    for (const iso of tanggalDalamTeks(a.jawab)) if (!boleh(iso)) blokir.push(`Pertanyaan antisipasi ${i + 1}: jawaban menyebut ${tglTeks(iso)}, padahal tanggal itu tidak ada di kartu — kemungkinan dikarang AI`);
+    const pola2 = C.cekTeks(a.tanya + ' ' + a.jawab); if (pola2.length) blokir.push(`Pertanyaan antisipasi ${i + 1}: memuat pola data pribadi (${pola2.join(', ')})`);
+  }
+  if (['kalender pendidikan', 'surat edaran', 'surat keputusan', 'regulasi', 'pengumuman'].includes(k.jenis) && !(k.antisipasi || []).length) peringatan.push('Tidak ada pertanyaan antisipasi: ROBI akan lebih sering memanggil AI saat menjawab');
+  if (konteks.hariIni && k.sampai && k.sampai < tglLokal(konteks.hariIni)) peringatan.push('Masa berlaku sudah lewat: data akan langsung masuk arsip');
+  if (konteks.hariIni && k.kategori === 'informasi terkini' && k.mulai) { const sel = (tglObj(k.mulai) - tglObj(tglLokal(konteks.hariIni))) / 864e5; if (sel > 180) peringatan.push('Informasi terkini berlaku lebih dari 6 bulan lagi. Mungkin seharusnya data pokok'); }
+  if (k.kategori === 'informasi terkini' && k.sampai && k.mulai && (tglObj(k.sampai) - tglObj(k.mulai)) / 864e5 > 90) peringatan.push('Informasi terkini berlaku lebih dari 90 hari. Mungkin seharusnya data pokok (mengubah pola)');
+  return { blokir, peringatan };
+}
+
+function tanggalDalamTeks(t) {
+  const out = []; const s = String(t || '');
+  for (const m of s.matchAll(/\b(\d{4})-(\d{2})-(\d{2})\b/g)) out.push(`${m[1]}-${m[2]}-${m[3]}`);
+  const re = new RegExp(`\\b(\\d{1,2})\\s+(${BULAN_ID.join('|')})\\s+(\\d{4})\\b`, 'gi');
+  for (const m of s.matchAll(re)) { const b = BULAN_ID.findIndex(x => x.toLowerCase() === m[2].toLowerCase()); out.push(`${m[3]}-${String(b + 1).padStart(2, '0')}-${String(+m[1]).padStart(2, '0')}`); }
+  return out;
+}
+// ---------------- UJI BALIK: ROBI menunjukkan apa yang ia pahami ----------------
+function ujiBalik(k) {
+  const dasar = `${k.judul}${k.nomor ? ' (' + k.nomor + ')' : ''}, ${k.penerbit}`;
+  const q = [];
+  q.push({ tanya: `Apa isi ${k.judul}?`, jawab: `Menurut ${dasar}: ${k.ringkasan}` });
+  q.push({ tanya: 'Kapan berlakunya?', jawab: k.sampai ? `Berlaku ${tglTeks(k.mulai)} sampai ${tglTeks(k.sampai)}, berdasarkan ${dasar}.` : `Berlaku mulai ${tglTeks(k.mulai)}, tanpa batas akhir yang disebut, berdasarkan ${dasar}.` });
+  const pilih = [...k.tanggalPenting].sort((a, b) => a.mulai.localeCompare(b.mulai));
+  const sampel = pilih.length <= 3 ? pilih : [pilih[0], pilih[Math.floor(pilih.length / 2)], pilih[pilih.length - 1]];
+  for (const t of sampel) q.push({ tanya: `Ada apa tanggal ${tglTeks(t.mulai).split(', ')[1]}?`, jawab: `Menurut ${dasar}, ${t.mulai === t.selesai ? 'tanggal ' + tglTeks(t.mulai) : tglTeks(t.mulai) + ' sampai ' + tglTeks(t.selesai)}: ${t.keterangan} (${t.jenis}).` });
+  if (k.ketentuan.length) q.push({ tanya: 'Apa saja ketentuannya?', jawab: `Menurut ${dasar}: ${k.ketentuan.slice(0, 3).join('; ')}${k.ketentuan.length > 3 ? '; dan ' + (k.ketentuan.length - 3) + ' ketentuan lain' : ''}.` });
+  for (const a of k.antisipasi || []) q.push({ tanya: a.tanya, jawab: a.jawab, sumber: 'antisipasi AI' });
+  return q;
+}
+
+// ---------------- ROSTER ----------------
+function bacaRoster(teks, book) {
+  const err = [];
+  const blok = ambilBlok(teks, 'ROSTER ROBI', 'AKHIR ROSTER');
+  if (!blok.length) return { ok: false, err: ['Format roster tidak ditemukan ("=== ROSTER ROBI v1 ===" … "=== AKHIR ROSTER ===")'] };
+  if (blok.length > 1) return { ok: false, err: ['Ada lebih dari satu blok roster'] };
+  const baris = blok[0][2].split('\n').map(s => s.trim()).filter(Boolean);
+  let mulai = null, dasar = null, kepala = null; const rows = []; const ragu = []; let diRagu = false;
+  for (const b of baris) {
+    if (/^---\s*RAGU\s*---$/i.test(b)) { diRagu = true; continue; }
+    if (diRagu) { const x = b.replace(/^[-•*]\s*/, ''); if (x && !/^tidak ada$/i.test(x)) ragu.push(x); continue; }
+    let m;
+    if ((m = /^BERLAKU_MULAI\s*:\s*(.*)$/.exec(b))) { mulai = bacaTanggal(m[1], 'BERLAKU_MULAI', err); continue; }
+    if ((m = /^DASAR\s*:\s*(.*)$/.exec(b))) { dasar = /^tidak ada$/i.test(m[1].trim()) ? null : m[1].trim(); continue; }
+    const p = b.split(';').map(s => s.trim());
+    if (/^hari$/i.test(p[0])) { kepala = p; continue; }
+    if (!kepala) { err.push(`Baris sebelum kepala tabel: "${b.slice(0, 50)}"`); continue; }
+    rows.push(p);
+  }
+  if (!mulai && !err.some(e => e.startsWith('BERLAKU_MULAI'))) err.push('BERLAKU_MULAI wajib diisi');
+  const kode = book.Kelas.map(k => k.kode);
+  if (!kepala) err.push('Kepala tabel "HARI;JAM_KE;…" tidak ada');
+  else if (kepala.slice(2).join(';') !== kode.join(';') || !/^jam_ke$/i.test(kepala[1] || '')) err.push(`Kepala tabel harus persis: HARI;JAM_KE;${kode.join(';')}`);
+  if (err.length) return { ok: false, err };
+  const R = []; const seen = new Set();
+  rows.forEach((p, i) => {
+    if (p.length !== kode.length + 2) return err.push(`Baris ${i + 1} (${p[0]} ${p[1]}): ${p.length - 2} sel, seharusnya ${kode.length}`);
+    const hari = HARI_ID.find(h => normHari(h) === normHari(p[0])); if (!hari) return err.push(`Baris ${i + 1}: hari "${p[0]}" tidak dikenal`);
+    if (!/^\d{1,2}$/.test(p[1])) return err.push(`Baris ${i + 1}: jam ke "${p[1]}" tidak sah`);
+    const key = hari + '|' + p[1]; if (seen.has(key)) err.push(`${hari} jam ke-${p[1]} muncul dua kali`); seen.add(key);
+    const r = { hari, jam_ke: +p[1] }; kode.forEach((k, j) => { r[k] = p[j + 2]; if (p[j + 2] === '??') err.push(`${hari} jam ke-${p[1]} kelas ${k}: AI tidak yakin (??)`); });
+    R.push(r);
+  });
+  if (ragu.length) err.push(...ragu.map(r => 'AI ragu: ' + r));
+  if (err.length) return { ok: false, err };
+  const v = C.validate({ ...book, Roster_Kode: R });
+  const keras = [...v.err, ...v.warn]; // pada impor, bentrok guru, sel kosong, dan beban jam diperlakukan sebagai kesalahan
+  // slot yang ada di Jam_Pelajaran tetapi tidak ada di roster
+  const wajib = book.Jam_Pelajaran.filter(slotAjar).map(j => j.hari + '|' + j.jam_ke);
+  for (const w of wajib) if (!seen.has(w)) keras.push(`Roster tidak memuat ${w.replace('|', ' jam ke-')}`);
+  if (keras.length) return { ok: false, err: keras };
+  // perbedaan dengan roster berlaku
+  let ubah = 0; const lama = new Map(book.Roster_Kode.map(r => [r.hari + '|' + r.jam_ke, r]));
+  for (const r of R) { const l = lama.get(r.hari + '|' + r.jam_ke); for (const k of kode) if (!l || l[k] !== r[k]) ubah++; }
+  return { ok: true, roster: R, mulai, dasar, slotBerubah: ubah };
+}
+
+module.exports = { buatPrompt, baca, urai, tafsir, periksa, ujiBalik, bacaRoster, tanggalDalamTeks, tglTeks, LABEL, BAGIAN, BAGIAN_OPSI, JENIS_DOK, JENIS_TGL, VERSI };
+
+__m['./kartu.js']=module.exports;})();
+(function(){var module={exports:{}},exports=module.exports,require=function(n){return __m[n]};
+// Informasi Terkini + Arsip — prototipe logika. Tanpa jaringan; analisis isi lampiran (scan/gambar/video) diwakili kolom teks hasil baca.
+'use strict';
+const C = require('./core.js');
+const { norm, tglLokal, HARI } = C;
+
+const JENIS_INPUT = ['teks', 'surat', 'gambar', 'video'];
+const tgl = s => { const [y, m, d] = String(s).split('-').map(Number); return new Date(y, m - 1, d); };
+const tambahHari = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+const tglTeks = s => { const d = tgl(s); return `${HARI[d.getDay()]}, ${d.getDate()} ${['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'][d.getMonth()]} ${d.getFullYear()}`; };
+const tmin = s => { const [h, m] = s.split('.').map(Number); return h * 60 + m; };
+const fmt = m => `${String(Math.floor(m / 60)).padStart(2, '0')}.${String(m % 60).padStart(2, '0')}`;
+
+// ---------- validasi saat disimpan ----------
+function validasi(info) {
+  const err = [], peringatan = [];
+  if (!JENIS_INPUT.includes(info.jenisInput)) err.push('Jenis input tidak dikenal');
+  if (info.jenisInput === 'video') { if (!String(info.judul || '').trim()) err.push('Video wajib punya judul'); if (!String(info.teks || '').trim()) err.push('Video wajib punya satu kalimat isi'); }
+  else if (!String(info.teks || '').trim()) err.push(info.jenisInput === 'teks' ? 'Isi informasi wajib diisi' : 'Hasil baca lampiran belum ada (menunggu analisis)');
+  if (!String(info.dasar || '').trim()) err.push('Dasar informasi wajib diisi');
+  const dOk = x => /^\d{4}-\d{2}-\d{2}$/.test(x || '') && !isNaN(tgl(x));
+  if (!dOk(info.mulai) || !dOk(info.selesai)) err.push('Tanggal mulai dan selesai wajib diisi dengan benar');
+  else if (tgl(info.selesai) < tgl(info.mulai)) err.push('Tanggal selesai lebih awal dari tanggal mulai');
+  if (info.publik) { const f = C.cekTeks(String(info.teks || '') + ' ' + String(info.lampiranTeks || '')); if (f.length) peringatan.push(`Lampiran publik memuat pola data pribadi: ${f.join(', ')}`); }
+  return { ok: !err.length, err, peringatan };
+}
+
+// ---------- analisis isi (lokal) ----------
+function semuaKelas(t, D) {
+  const out = new Set();
+  for (const k of D.kelas) for (const a of k.alias) if (new RegExp(`(^|\\s)${a.replace(/\+/g, '\\+')}(\\s|$)`).test(t)) out.add(k.kode);
+  for (const m of t.matchAll(/\b(vii|viii|ix|7|8|9)\s*[.\-]\s*([1-9])\b/g)) { const tk = { vii: 7, viii: 8, ix: 9 }[m[1]] || +m[1]; const k = D.kelas.find(x => x.tingkat === tk && x.no === +m[2]); if (k) out.add(k.kode); }
+  for (const m of t.matchAll(/\bkelas\s+(vii|viii|ix|7|8|9)\b(?!\s*[.\-]?\s*\d)/g)) { const tk = { vii: 7, viii: 8, ix: 9 }[m[1]] || +m[1]; if ([...out].some(k => D.kelas.find(x => x.kode === k).tingkat === tk)) continue; /* "kelas IX Biner" = satu kelas, bukan seluruh tingkat */ D.kelas.filter(x => x.tingkat === tk).forEach(x => out.add(x.kode)); }
+  return [...out];
+}
+function analisis(info, D) {
+  const t = norm(info.teks + ' ' + (info.judul || ''));
+  let inti = t;
+  if (/^\s*(karena|sebab|dalam rangka|terkait|menyusul)\b/.test(inti) && inti.includes(',')) inti = inti.slice(inti.indexOf(',') + 1); // alasan di depan: buang sampai koma
+  else if (/^\s*(karena|sebab|dalam rangka|terkait|menyusul)\b/.test(inti) && /\b(kelas|siswa|semua|seluruh)\b/.test(inti)) inti = inti.slice(inti.search(/\b(kelas|siswa|semua|seluruh)\b/));
+  inti = inti.split(/\b(?:karena|sebab|dalam rangka|terkait|untuk persiapan|menyusul)\b/)[0]; // kelas di bagian alasan tidak ikut terdampak
+  const kelas = semuaKelas(inti, D);
+  const g = C.cariGuru(t, D); const guru = g.guru ? [g.guru.kode] : [];
+  const semua = /\b(semua|seluruh)\s+(kelas|siswa|warga sekolah|peserta didik)\b/.test(t);
+  const pukul = (() => { const m = /\b(?:pukul|jam)\s+(\d{1,2})[.:](\d{2})\b/.exec(t) || /\bpukul\s+(\d{1,2})\b/.exec(t); return m ? +m[1] * 60 + (+m[2] || 0) : null; })();
+  let efek = 'KEGIATAN';
+  if (guru.length && /\b(berhalangan|izin|sakit|dinas|tidak hadir|cuti)\b/.test(t)) efek = 'GURU_BERHALANGAN';
+  else if (/\b(libur|diliburkan|tidak ada (kegiatan belajar|pelajaran|sekolah)|belajar dari rumah)\b/.test(t)) efek = 'LIBUR';
+  else if (/\bpulang\b/.test(t)) efek = 'PULANG';
+  else if (/\bmasuk\b/.test(t) && /\b(pukul|jam)\b/.test(t)) efek = 'MASUK';
+  const tanya = [];
+  if ((efek === 'PULANG' || efek === 'MASUK') && pukul === null) tanya.push(`Siswa ${efek === 'PULANG' ? 'pulang' : 'masuk'} pukul berapa?`);
+  if (['LIBUR', 'PULANG', 'MASUK'].includes(efek) && !kelas.length && !semua) tanya.push('Informasi ini berlaku untuk semua kelas?');
+  { const hariDiTeks = HARI.filter(h => new RegExp(`\\b${h.toLowerCase()}\\b`).test(t));
+    const hariBerlaku = new Set(); for (let d = tgl(info.mulai); d <= tgl(info.selesai) && hariBerlaku.size < 7; d = tambahHari(d, 1)) hariBerlaku.add(HARI[d.getDay()]);
+    const beda = hariDiTeks.filter(h => !hariBerlaku.has(h));
+    if (beda.length) tanya.push(`Teks menyebut hari ${beda.join(', ')}, tetapi tanggal berlaku ${tglTeks(info.mulai)}${info.selesai !== info.mulai ? ' s.d. ' + tglTeks(info.selesai) : ''}. Mana yang benar?`);
+    if (info.diinput) { for (const [w, o] of [['hari ini', 0], ['besok', 1], ['lusa', 2]]) if (t.includes(` ${w} `)) { const d = tglLokal(tambahHari(tgl(info.diinput), o)); if (d < info.mulai || d > info.selesai) tanya.push(`Teks menyebut "${w}" (${tglTeks(d)}), tetapi tanggal berlaku berbeda. Mana yang benar?`); } } }
+  if (g.guruAmbigu) tanya.push(`Guru yang dimaksud: ${g.guruAmbigu.map(x => x.nama).join(' atau ')}?`);
+  const cakupanKelas = kelas.length ? kelas : (semua || efek === 'KEGIATAN' ? D.kelas.map(k => k.kode) : []);
+  // dampak terhadap jadwal tersimpan
+  const dampak = [];
+  for (let d = tgl(info.mulai); d <= tgl(info.selesai); d = tambahHari(d, 1)) {
+    const hari = HARI[d.getDay()]; const sl = D.slot[hari]; if (!sl) continue;
+    for (const r of D.jadwal.filter(x => x.hari === hari)) {
+      const v = sl[r.jam_ke]; let kena = false;
+      if (efek === 'LIBUR' && cakupanKelas.includes(r.kelas)) kena = true;
+      if (efek === 'PULANG' && pukul !== null && cakupanKelas.includes(r.kelas) && tmin(v.selesai) > pukul) kena = true;
+      if (efek === 'MASUK' && pukul !== null && cakupanKelas.includes(r.kelas) && tmin(v.mulai) < pukul) kena = true;
+      if (efek === 'GURU_BERHALANGAN' && guru.includes(r.guru)) kena = true;
+      if (kena) dampak.push({ tanggal: tglLokal(d), hari, jam_ke: r.jam_ke, kelas: r.kelas });
+    }
+  }
+  return { efek, kelas: cakupanKelas, semua: semua || (!kelas.length && efek !== 'GURU_BERHALANGAN'), guru, pukul, tanya, dampak, spesifik: (kelas.length ? 2 : 0) + (guru.length ? 2 : 0) };
+}
+
+// ---------- simpan (dengan konfirmasi pengisi) ----------
+class Terkini {
+  constructor(D) { this.D = D; this.data = []; this.seq = 0; }
+  ajukan(info) { // langkah 1-3: validasi + analisis + pertanyaan kelengkapan; belum disimpan
+    const v = validasi(info); if (!v.ok) return { ok: false, err: v.err };
+    const siap = info.jenisInput === 'teks' || info.jenisInput === 'video' || info.dibaca === true;
+    if (!siap) return { ok: true, status: 'menunggu analisis', peringatan: v.peringatan };
+    const a = analisis(info, this.D);
+    return { ok: true, status: a.tanya.length ? 'perlu dilengkapi' : 'siap dikonfirmasi', analisis: a, peringatan: v.peringatan, konflik: this.konflik(info, a) };
+  }
+  // info aktif lain yang tanggalnya beririsan dan menyasar kelas/guru yang sama (kegiatan umum tidak dihitung)
+  konflik(info, a) {
+    if (a.efek === 'KEGIATAN') return [];
+    return this.data.filter(e => e.status === 'aktif' && e.mulai <= info.selesai && info.mulai <= e.selesai && e.analisis.efek !== 'KEGIATAN')
+      .filter(e => a.kelas.some(k => e.analisis.kelas.includes(k)) || a.guru.some(g => e.analisis.guru.includes(g)))
+      .map(e => ({ id: e.id, teks: e.teks, dasar: e.dasar, mulai: e.mulai, selesai: e.selesai }));
+  }
+  // mencabut info: yang sudah berjalan dipotong sampai kemarin (masuk arsip), yang belum berjalan dibatalkan
+  cabut(id, hariIni, alasan) {
+    const e = this.data.find(x => x.id === id); if (!e) return { ok: false, err: ['Info tidak ditemukan'] };
+    if (!String(alasan || '').trim()) return { ok: false, err: ['Alasan pencabutan wajib diisi'] };
+    const hari = tglLokal(hariIni), kemarin = tglLokal(tambahHari(hariIni, -1));
+    e.dicabut = { tanggal: hari, alasan };
+    if (e.mulai >= hari) e.status = 'dibatalkan'; else if (e.selesai > kemarin) e.selesai = kemarin;
+    return { ok: true, status: this.status(e, hariIni) };
+  }
+  simpan(info, dikonfirmasi, keputusanKonflik) { // langkah 5: hanya bila pengisi menyetujui dan tidak ada pertanyaan tersisa
+    const r = this.ajukan(info);
+    if (!r.ok) return r;
+    if (r.status === 'menunggu analisis') { const e = { ...info, id: ++this.seq, status: 'menunggu analisis', dibuat: this.seq }; this.data.push(e); return { ok: true, id: e.id, status: e.status }; }
+    if (r.status !== 'siap dikonfirmasi') return { ok: false, err: r.analisis.tanya };
+    if (!dikonfirmasi) return { ok: false, err: ['Belum dikonfirmasi pengisi'] };
+    if (r.konflik.length && !['keduanya', 'gantikan'].includes(keputusanKonflik)) return { ok: false, err: ['Bentrok dengan info aktif: ' + r.konflik.map(k => `#${k.id} (dasar ${k.dasar})`).join(', ') + '. Pilih: berlakukan keduanya atau gantikan yang lama'], konflik: r.konflik };
+    if (keputusanKonflik === 'gantikan') for (const k of r.konflik) this.cabut(k.id, tgl(info.diinput || info.mulai), 'digantikan informasi baru (dasar ' + info.dasar + ')');
+    const e = { ...info, id: ++this.seq, status: 'aktif', analisis: r.analisis, dibuat: this.seq }; this.data.push(e); return { ok: true, id: e.id, status: 'aktif' };
+  }
+  // ---- persetujuan Kepala Sekolah (Konsep Induk: Operator menginput, Kepala Sekolah menyetujui) ----
+  ajukanPersetujuan(info, keputusanKonflik, oleh) {
+    const r = this.ajukan(info);
+    if (!r.ok) return r;
+    if (r.status === 'menunggu analisis') return { ok: false, err: ['Lampiran belum dibaca: lengkapi dulu'] };
+    if (r.status !== 'siap dikonfirmasi') return { ok: false, err: r.analisis.tanya };
+    if (r.konflik.length && !['keduanya', 'gantikan'].includes(keputusanKonflik)) return { ok: false, err: ['Bentrok dengan info aktif: pilih berlakukan keduanya atau gantikan'], konflik: r.konflik };
+    const e = { ...info, id: ++this.seq, status: 'menunggu persetujuan', analisis: r.analisis, dibuat: this.seq, keputusanKonflik: r.konflik.length ? keputusanKonflik : null, konflikSaatAjuan: r.konflik.map(k => k.id), diajukan: oleh || null };
+    this.data.push(e); return { ok: true, id: e.id, status: e.status };
+  }
+  setujui(id, { oleh, peran, hariIni }) {
+    if (peran !== 'kepala sekolah') return { ok: false, err: ['Hanya Kepala Sekolah yang dapat menyetujui'] };
+    const e = this.data.find(x => x.id === id); if (!e || e.status !== 'menunggu persetujuan') return { ok: false, err: ['Tidak ada ajuan dengan nomor itu'] };
+    const kini = this.konflik(e, e.analisis).filter(k => k.id !== id);
+    const baru = kini.filter(k => !e.konflikSaatAjuan.includes(k.id));
+    if (baru.length) return { ok: false, err: ['Sejak diajukan muncul info aktif lain yang bentrok: ' + baru.map(k => '#' + k.id).join(', ') + '. Kembalikan ke Operator untuk ditinjau'], konflik: baru };
+    if (e.keputusanKonflik === 'gantikan') for (const k of kini) this.cabut(k.id, hariIni || tgl(e.diinput || e.mulai), 'digantikan informasi #' + id + ' (dasar ' + e.dasar + ')');
+    e.status = 'aktif'; e.disetujui = { oleh, sendiri: !!(e.diajukan && e.diajukan === oleh) };
+    return { ok: true, status: 'aktif' };
+  }
+  tolak(id, { oleh, peran, alasan }) {
+    if (peran !== 'kepala sekolah') return { ok: false, err: ['Hanya Kepala Sekolah yang dapat menolak'] };
+    if (!String(alasan || '').trim()) return { ok: false, err: ['Alasan wajib diisi'] };
+    const e = this.data.find(x => x.id === id); if (!e || e.status !== 'menunggu persetujuan') return { ok: false, err: ['Tidak ada ajuan dengan nomor itu'] };
+    e.status = 'ditolak'; e.ditolak = { oleh, alasan }; return { ok: true };
+  }
+  status(e, hariIni) { if (['menunggu analisis', 'dibatalkan', 'menunggu persetujuan', 'ditolak'].includes(e.status)) return e.status; return tgl(e.selesai) < tgl(tglLokal(hariIni)) ? 'arsip' : 'aktif'; }
+  // informasi yang meliputi tanggal tertentu dan relevan dengan pertanyaan, paling spesifik lalu paling baru
+  untuk(tanggal, hariIni, f = {}) {
+    const iso = tglLokal(tanggal);
+    return this.data.filter(e => e.status === 'aktif' && e.mulai <= iso && iso <= e.selesai)
+      .filter(e => { const a = e.analisis; if (f.guru !== undefined && a.guru.includes(f.guru)) return true; if (a.efek === 'GURU_BERHALANGAN') return f.guru !== undefined && a.guru.includes(f.guru) || (f.guruDiKelas || []).some(g => a.guru.includes(g)); return f.kelas ? a.kelas.includes(f.kelas) : true; })
+      .map(e => ({ ...e, statusSaatIni: this.status(e, hariIni) }))
+      .sort((x, y) => y.analisis.spesifik - x.analisis.spesifik || y.dibuat - x.dibuat);
+  }
+  arsip(hariIni, kriteria = {}) {
+    return this.data.filter(e => ['arsip', 'dibatalkan'].includes(this.status(e, hariIni))).filter(e => {
+      if (kriteria.bulan !== undefined && tgl(e.mulai).getMonth() !== kriteria.bulan && tgl(e.selesai).getMonth() !== kriteria.bulan) return false;
+      if (kriteria.tanggal && !(e.mulai <= kriteria.tanggal && kriteria.tanggal <= e.selesai)) return false;
+      if (kriteria.kata && !norm(e.teks + ' ' + (e.judul || '') + ' ' + e.dasar).includes(norm(kriteria.kata).trim())) return false;
+      return true;
+    });
+  }
+}
+
+// ---------- menjawab dengan prioritas informasi terkini ----------
+const BULAN = ['januari', 'februari', 'maret', 'april', 'mei', 'juni', 'juli', 'agustus', 'september', 'oktober', 'november', 'desember'];
+function tanggalTarget(t, now) {
+  const rel = [['lusa', 2], ['besok', 1], ['kemarin', -1], ['hari ini', 0], ['sekarang', 0]];
+  for (const [w, o] of rel) if (t.includes(` ${w} `)) return { d: tambahHari(now, o), jelas: true };
+  const m = /\b(\d{1,2})\s+(januari|februari|maret|april|mei|juni|juli|agustus|september|oktober|november|desember)(?:\s+(\d{4}))?\b/.exec(t);
+  if (m) { if (m[3]) return { d: new Date(+m[3], BULAN.indexOf(m[2]), +m[1]), jelas: true };
+    const cal = [-1, 0, 1].map(o => new Date(now.getFullYear() + o, BULAN.indexOf(m[2]), +m[1])); // tanpa tahun: tanggal terdekat
+    return { d: cal.sort((a, b) => Math.abs(a - now) - Math.abs(b - now))[0], jelas: true }; }
+  const hs = { senin: 1, selasa: 2, rabu: 3, kamis: 4, jumat: 5, sabtu: 6, minggu: 0 };
+  for (const [w, i] of Object.entries(hs)) if (new RegExp(`\\b${w}\\b`).test(t)) { const lalu = /\b(lalu|kemarin|kemaren)\b/.test(t); let off = (i - now.getDay() + 7) % 7; if (lalu) off = off === 0 ? -7 : off - 7; return { d: tambahHari(now, off), jelas: false }; }
+  return { d: now, jelas: false, bawaan: true };
+}
+const kalimatDasar = e => `berdasarkan informasi terkini dengan dasar ${e.dasar}`;
+function proses(teks, sesi, now, D, T, opt = {}) {
+  const t = norm(teks);
+  const hariIni = now;
+  // 1. permintaan arsip langsung
+  if (/\barsip\b/.test(t) || /\b(tampilkan|lihat|cari)\b.*\binformasi\b/.test(t)) {
+    const k = {}; const mb = BULAN.findIndex(b => t.includes(` ${b} `)); if (mb >= 0) k.bulan = mb;
+    const tt = tanggalTarget(t, now); if (tt.jelas) k.tanggal = tglLokal(tt.d);
+    const km = /\btentang\s+(.+?)\s*$/.exec(t); if (km) k.kata = km[1];
+    const r = T.arsip(hariIni, k);
+    if (!r.length) return { intent: 'ARSIP', text: 'Tidak ada arsip informasi yang sesuai dengan permintaan itu.' };
+    return { intent: 'ARSIP', text: 'Arsip informasi: ' + r.map(e => `${e.status === 'dibatalkan' ? '(dicabut sebelum atau pada hari pertama berlaku) ' : ''}${tglTeks(e.mulai)}${e.selesai !== e.mulai ? ' s.d. ' + tglTeks(e.selesai) : ''}: ${e.jenisInput === 'video' ? 'video "' + e.judul + '" — ' : ''}${e.teks} (dasar: ${e.dasar})`).join('; ') + '.', lampiran: r.filter(e => e.publik && e.lampiran).map(e => e.lampiran) };
+  }
+  const tt = tanggalTarget(t, now); const target = tt.d; const lampau = tglLokal(target) < tglLokal(now);
+  // 2. pertanyaan hari sekolah / libur
+  const tanyaHariSekolah = /\b(libur|ada pelajaran|masuk sekolah|hari sekolah)\b/.test(t) || (/\bsekolah\b/.test(t) && /\b(hari ini|besok|lusa|kemarin|senin|selasa|rabu|kamis|jumat|sabtu|minggu|januari|februari|maret|april|mei|juni|juli|agustus|september|oktober|november|desember)\b/.test(t) && !/\b(profil|kepala|alamat|nomor|telepon|video|nama|halaman|lapangan|kantin)\b/.test(t));
+  if (tanyaHariSekolah && !C.cariKelas(t, D).kelas) {
+    const hari = HARI[target.getDay()]; const rutinLibur = hari === 'Minggu' || !D.slot[hari];
+    const label = tt.bawaan ? 'hari ini' : (t.includes(' kemarin ') ? `kemarin (${tglTeks(tglLokal(target))})` : t.includes(' besok ') ? `besok (${tglTeks(tglLokal(target))})` : tglTeks(tglLokal(target)));
+    const rutin = `Menurut jadwal rutin, ${label} ${rutinLibur ? 'adalah hari libur' : 'adalah hari sekolah'}`;
+    const info = T.untuk(target, hariIni).filter(e => e.analisis.efek === 'LIBUR' || e.analisis.efek === 'PULANG' || e.analisis.efek === 'MASUK');
+    if (!info.length) return { intent: 'HARI_SEKOLAH', text: rutin + '.' };
+    const e = info[0];
+    return { intent: 'HARI_SEKOLAH', text: `${rutin}. Namun ${kalimatDasar(e)}, ${lampau ? 'pada tanggal itu' : 'berlaku'}: ${e.teks}.`, dipakai: info.map(x => x.id), arsip: info.some(x => x.statusSaatIni === 'arsip') };
+  }
+  // 3. pertanyaan langsung tentang isi informasi aktif (alasan, kegiatan)
+  const aktif = T.data.filter(e => T.status(e, hariIni) === 'aktif');
+  const qTok = t.trim().split(' ').filter(w => w.length > 3 && !['kenapa', 'mengapa', 'apakah', 'bagaimana', 'robi', 'tentang', 'informasi'].includes(w));
+  const UMUM = new Set(['kelas', 'siswa', 'hari', 'pulang', 'masuk', 'sekolah', 'jam', 'pukul', 'belajar', 'pelajaran', 'guru', 'semua', 'karena', 'untuk', 'berapa', 'besok', 'sekarang', 'ini']);
+  const pemicu = /\b(kenapa|mengapa|alasan|ada apa|info terbaru|informasi terbaru|pengumuman)\b/.test(t);
+  const intentInti = C.understand(teks, { topik: null }, now, D).intent;
+  if (pemicu || ['LLM', 'FAQ'].includes(intentInti)) {
+    const skor = e => qTok.filter(w => (pemicu || !UMUM.has(w)) && norm(e.teks + ' ' + (e.judul || '')).includes(` ${w}`)).length;
+    const cocok = aktif.map(e => [e, skor(e)]).filter(x => x[1] > 0 || /\b(info terbaru|informasi terbaru|pengumuman)\b/.test(t)).sort((a, b) => b[1] - a[1] || b[0].dibuat - a[0].dibuat);
+    if (cocok.length) { const e = cocok[0][0]; return { intent: 'TERKINI_LANGSUNG', text: `Menurut informasi terkini (dasar: ${e.dasar}), berlaku ${tglTeks(e.mulai)}${e.selesai !== e.mulai ? ' sampai ' + tglTeks(e.selesai) : ''}: ${e.jenisInput === 'video' ? 'video "' + e.judul + '" — ' : ''}${e.teks}.`, dipakai: [e.id], lampiran: e.publik && e.lampiran ? [e.lampiran] : [] }; }
+  }
+  // 4. jawaban rutin dari inti, lalu ditimpa/ditambah informasi terkini
+  const a = C.proses(teks, sesi, now, D, opt);
+  const s = (C.understand(teks, { topik: null }, now, D).slots) || {};
+  const hariJawab = a.topik && (a.topik.hari || (a.intent === 'GURU_HADIR' ? HARI[now.getDay()] : undefined)); if (!a.text || !hariJawab) return a;
+  // tanggal yang dibicarakan: dari tanggalTarget bila jelas; bila hanya nama hari, tanggal terdekat ke depan
+  let dTgt = target; if (!tt.jelas && HARI[dTgt.getDay()] !== hariJawab) { const i = HARI.indexOf(hariJawab); dTgt = tambahHari(now, (i - now.getDay() + 7) % 7); }
+  const lampauJ = tglLokal(dTgt) < tglLokal(now);
+  const kelas = a.topik.kelas ? a.topik.kelas.kode : undefined;
+  const guruTopik = a.topik.guru ? a.topik.guru.kode : undefined;
+  const guruDiKelas = kelas && a.topik.jam !== undefined ? D.jadwal.filter(x => x.hari === hariJawab && x.kelas === kelas && x.jam_ke === a.topik.jam).map(x => x.guru) : (kelas ? D.jadwal.filter(x => x.hari === hariJawab && x.kelas === kelas).map(x => x.guru) : []);
+  let info = T.untuk(dTgt, hariIni, { kelas, guru: guruTopik, guruDiKelas });
+  if (!lampauJ) info = info.filter(e => e.statusSaatIni === 'aktif'); // arsip tidak pernah untuk hari ini/ke depan
+  info = info.filter(e => e.analisis.efek !== 'KEGIATAN'); // kegiatan umum tidak ditempelkan ke jawaban jadwal; dijawab lewat pertanyaan langsung
+  if (!info.length) return a;
+  const e = info[0]; const an = e.analisis; let tambahan;
+  if (an.efek === 'LIBUR') tambahan = `Namun ${kalimatDasar(e)}, ${lampauJ ? 'pada tanggal itu' : 'pada ' + tglTeks(tglLokal(dTgt))} sekolah diliburkan: ${e.teks}.`;
+  else if (an.efek === 'PULANG') { const jamDitanya = a.topik.jam !== undefined && D.slot[hariJawab][a.topik.jam]; if (jamDitanya && tmin(jamDitanya.selesai) <= an.pukul) return a; tambahan = jamDitanya && tmin(jamDitanya.selesai) > an.pukul ? `Namun ${kalimatDasar(e)}, siswa pulang pukul ${fmt(an.pukul)}, sehingga jam itu tidak ada pelajaran: ${e.teks}.` : `Namun ${kalimatDasar(e)}: ${e.teks}.`; }
+  else if (an.efek === 'MASUK') tambahan = `Namun ${kalimatDasar(e)}, siswa masuk pukul ${fmt(an.pukul)}: ${e.teks}.`;
+  else if (an.efek === 'GURU_BERHALANGAN') tambahan = `Namun ${kalimatDasar(e)}: ${e.teks}.`;
+  else tambahan = `Informasi terkini (dasar: ${e.dasar}): ${e.teks}.`;
+  const rutin = a.text.replace(/^Kelas /, 'Menurut jadwal rutin, kelas ').replace(/^Hari (\w+) siswa/, 'Menurut jadwal rutin, hari $1 siswa').replace(/^Menurut roster, /, 'Menurut jadwal rutin, ');
+  return { ...a, text: `${rutin} ${tambahan}`, dipakai: info.map(x => x.id), arsip: info.some(x => x.statusSaatIni === 'arsip') };
+}
+
+module.exports = { Terkini, validasi, analisis, proses, tanggalTarget };
+
+__m['./terkini.js']=module.exports;})();
+(function(){var module={exports:{}},exports=module.exports,require=function(n){return __m[n]};
+// Data Pokok berversi — dokumen (hasil siklus baca) dan roster, dengan persetujuan Kepala Sekolah,
+// pemilihan menurut tanggal berlaku, bentrok antar-penerbit, tinjauan, dan jawaban terpadu (Konsep Induk ROBI v1.0).
+'use strict';
+const C = require('./core.js');
+const K = require('./kartu.js');
+const TK = require('./terkini.js');
+const { tglLokal, HARI } = C;
+const tgl = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+const tambah = (iso, n) => { const d = tgl(iso); d.setDate(d.getDate() + n); return tglLokal(d); };
+const selisih = (a, b) => Math.round((tgl(b) - tgl(a)) / 864e5);
+const tglTeks = K.tglTeks;
+// jenis tanggal penting yang saling meniadakan bila jatuh pada tanggal yang sama
+const LAWAN = { libur: ['hari efektif', 'ujian'], 'hari efektif': ['libur'], ujian: ['libur'] };
+
+class Pokok {
+  constructor() { this.items = []; this.seq = 0; this.putusan = []; this.notif = []; }
+  // ---------- ajuan (Operator) ----------
+  ajukan({ tipe, kartu, roster, mulai, dasar, masalah = [], peringatan = [], riwayat = [], menggantikan = null, oleh, lampiran = null }) {
+    const err = [];
+    if (!['dokumen', 'roster'].includes(tipe)) err.push('Tipe data tidak dikenal');
+    if (tipe === 'dokumen' && !kartu) err.push('Belum ada hasil baca (kartu data)');
+    if (tipe === 'roster' && (!Array.isArray(roster) || !roster.length)) err.push('Roster kosong');
+    if (tipe === 'roster' && !/^\d{4}-\d{2}-\d{2}$/.test(mulai || '')) err.push('Roster wajib punya tanggal berlaku mulai');
+    if (menggantikan !== null) { const lama = this.items.find(x => x.id === menggantikan); if (!lama) err.push('Data yang digantikan tidak ditemukan'); else if (lama.tipe !== tipe) err.push('Data yang digantikan harus sejenis'); }
+    if (err.length) return { ok: false, err };
+    const it = { id: ++this.seq, tipe, kartu: kartu || null, roster: roster || null, status: 'menunggu persetujuan', masalah: [...masalah], peringatan: [...peringatan], riwayat: [...riwayat], menggantikan, diajukan: { oleh }, lampiran };
+    if (tipe === 'dokumen') { it.mulai = kartu.mulai; it.sampai = kartu.sampai; it.jenis = kartu.jenis; it.penerbit = kartu.penerbit; it.judul = kartu.judul; it.dasar = kartu.nomor || kartu.judul; }
+    else { it.mulai = mulai; it.sampai = null; it.jenis = 'roster'; it.penerbit = 'sekolah'; it.judul = 'Roster berlaku ' + tglTeks(mulai); it.dasar = dasar || 'Roster sekolah'; }
+    this.items.push(it); return { ok: true, id: it.id };
+  }
+  // perpanjangan = ajuan versi baru yang menggantikan versi lama, wajib dasar baru
+  ajukanPerpanjangan(id, { sampai, dasar, oleh }) {
+    const lama = this.items.find(x => x.id === id); if (!lama || lama.tipe !== 'dokumen') return { ok: false, err: ['Data tidak ditemukan'] };
+    if (!String(dasar || '').trim()) return { ok: false, err: ['Perpanjangan wajib disertai dasar baru'] };
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(sampai || '') || (lama.sampai && sampai <= lama.sampai)) return { ok: false, err: ['Tanggal berakhir baru harus sesudah tanggal berakhir lama'] };
+    const kartu = { ...lama.kartu, sampai, nomor: dasar, judul: lama.kartu.judul };
+    return this.ajukan({ tipe: 'dokumen', kartu, menggantikan: id, oleh, riwayat: [{ aksi: 'perpanjangan', dari: id }] });
+  }
+  // ---------- persetujuan (Kepala Sekolah) ----------
+  setujui(id, { oleh, peran, alasan, ujiBalikDibenarkan, hariIni = new Date() }) {
+    if (peran !== 'kepala sekolah') return { ok: false, err: ['Hanya Kepala Sekolah yang dapat menyetujui'] };
+    const it = this.items.find(x => x.id === id); if (!it || it.status !== 'menunggu persetujuan') return { ok: false, err: ['Tidak ada ajuan dengan nomor itu'] };
+    if (it.tipe === 'dokumen' && !ujiBalikDibenarkan) return { ok: false, err: ['Uji balik belum dibenarkan'] };
+    if (it.masalah.length && !String(alasan || '').trim()) return { ok: false, err: ['Masih ada temuan pemeriksaan; tulis alasan persetujuan'] };
+    it.status = 'disetujui'; it.disetujui = { oleh, alasan: it.masalah.length ? alasan : null, sendiri: it.diajukan.oleh === oleh }; it.disetujuiTanggal = tglLokal(hariIni);
+    return { ok: true };
+  }
+  tolak(id, { oleh, peran, alasan }) {
+    if (peran !== 'kepala sekolah') return { ok: false, err: ['Hanya Kepala Sekolah yang dapat menolak'] };
+    if (!String(alasan || '').trim()) return { ok: false, err: ['Alasan wajib diisi'] };
+    const it = this.items.find(x => x.id === id); if (!it || it.status !== 'menunggu persetujuan') return { ok: false, err: ['Tidak ada ajuan dengan nomor itu'] };
+    it.status = 'ditolak'; it.ditolak = { oleh, alasan }; return { ok: true };
+  }
+  // pencabutan dan pengarsipan boleh oleh Operator: tercatat dan diberitahukan ke Kepala Sekolah
+  cabut(id, { oleh, peran, alasan, hariIni }) {
+    const it = this.items.find(x => x.id === id); if (!it || it.status !== 'disetujui') return { ok: false, err: ['Hanya data yang berlaku yang dapat dicabut'] };
+    if (!String(alasan || '').trim()) return { ok: false, err: ['Alasan wajib diisi'] };
+    it.status = 'dicabut'; it.dicabut = { oleh, peran, alasan, tanggal: tglLokal(hariIni) };
+    if (peran !== 'kepala sekolah') this.notif.push({ aksi: 'dicabut', id, oleh, alasan, tanggal: tglLokal(hariIni) });
+    return { ok: true };
+  }
+  arsipkan(id, { oleh, peran, hariIni }) {
+    const it = this.items.find(x => x.id === id); if (!it) return { ok: false, err: ['Data tidak ditemukan'] };
+    if (this.keadaan(it, hariIni) !== 'kedaluwarsa') return { ok: false, err: ['Hanya data kedaluwarsa yang diarsipkan; data berlaku dicabut'] };
+    it.diarsipkan = { oleh, tanggal: tglLokal(hariIni) };
+    if (peran !== 'kepala sekolah') this.notif.push({ aksi: 'diarsipkan', id, oleh, tanggal: tglLokal(hariIni) });
+    return { ok: true };
+  }
+  // ---------- keadaan menurut tanggal ----------
+  pengganti(it) { return this.items.find(x => x.menggantikan === it.id && x.status === 'disetujui'); }
+  keadaan(it, hariIni) {
+    const h = tglLokal(hariIni);
+    if (it.status !== 'disetujui') return it.status; // menunggu persetujuan · ditolak · dicabut
+    const g = this.pengganti(it); if (g && g.mulai <= h) return 'digantikan';
+    if (it.tipe === 'roster') { const lebihBaru = this.rosterSemua().find(r => r.mulai > it.mulai && r.mulai <= h); if (lebihBaru) return 'digantikan'; }
+    if (it.mulai > h) return 'terjadwal';
+    if (it.sampai && it.sampai < h) return it.diarsipkan ? 'diarsipkan' : 'kedaluwarsa';
+    return 'berlaku';
+  }
+  // dokumen yang berlaku pada tanggal tertentu (aturan pasti: rentang, buang yang digantikan)
+  berlakuPada(iso) {
+    return this.items.filter(it => it.tipe === 'dokumen' && it.status === 'disetujui' && it.mulai <= iso && (!it.sampai || iso <= it.sampai))
+      .filter(it => { const g = this.pengganti(it); return !(g && g.mulai <= iso); });
+  }
+  rosterSemua() { return this.items.filter(x => x.tipe === 'roster' && x.status === 'disetujui').sort((a, b) => b.mulai.localeCompare(a.mulai) || b.id - a.id); }
+  rosterPada(iso) { return this.rosterSemua().find(r => r.mulai <= iso) || null; }
+  // ---------- tanggal penting pada sebuah tanggal, dengan aturan bentrok ----------
+  tanggalPada(iso) {
+    const ent = [];
+    for (const it of this.berlakuPada(iso)) for (const t of it.kartu.tanggalPenting) if (t.mulai <= iso && iso <= t.selesai) ent.push({ ...t, sumber: it });
+    // penerbit sama: terbit (disetujui) terbaru menang untuk jenis yang sama
+    const out = []; const byPen = {};
+    for (const e of ent) (byPen[e.sumber.penerbit + '|' + e.jenis] ||= []).push(e);
+    for (const arr of Object.values(byPen)) out.push(arr.sort((a, b) => b.sumber.id - a.sumber.id)[0]);
+    // bentrok antar-penerbit: jenis saling meniadakan
+    const bentrok = [];
+    for (const a of out) for (const b of out) if (a.sumber.id < b.sumber.id && a.sumber.penerbit !== b.sumber.penerbit && (LAWAN[a.jenis] || []).includes(b.jenis)) bentrok.push([a, b]);
+    // keputusan Kepala Sekolah atas bentrok
+    const kalah = new Set();
+    for (const [a, b] of bentrok) { const p = this.putusan.find(x => [a.sumber.id, b.sumber.id].includes(x.menang) && [a.sumber.id, b.sumber.id].includes(x.kalah)); if (p) kalah.add(p.kalah); }
+    return { entri: out.filter(e => !kalah.has(e.sumber.id)), bentrok: bentrok.filter(([a, b]) => !kalah.has(a.sumber.id) && !kalah.has(b.sumber.id)) };
+  }
+  putuskanBentrok({ menang, kalah, oleh, peran }) {
+    if (peran !== 'kepala sekolah') return { ok: false, err: ['Hanya Kepala Sekolah yang memutuskan bentrok'] };
+    this.putusan.push({ menang, kalah, oleh }); return { ok: true };
+  }
+  // ---------- daftar tinjauan ----------
+  tinjauan(hariIni) {
+    const h = tglLokal(hariIni); const g = { kedaluwarsa: [], bentrok: [], segera: [], tinjauUlang: [], menunggu: [], belumAda: [] };
+    for (const it of this.items) {
+      const k = this.keadaan(it, hariIni);
+      if (k === 'kedaluwarsa') g.kedaluwarsa.push(it);
+      if (k === 'menunggu persetujuan') g.menunggu.push(it);
+      if (k === 'berlaku' && it.sampai && selisih(h, it.sampai) <= 30) g.segera.push(it);
+      if (k === 'berlaku' && !it.sampai && it.tipe === 'dokumen' && it.disetujui && it.disetujuiTanggal && selisih(it.disetujuiTanggal, h) > 365) g.tinjauUlang.push(it);
+    }
+    // bentrok antar-penerbit dalam 60 hari ke depan
+    const seen = new Set();
+    for (let i = 0; i < 60; i++) { const d = tambah(h, i); for (const [a, b] of this.tanggalPada(d).bentrok) { const key = a.sumber.id + '|' + b.sumber.id + '|' + a.keterangan; if (!seen.has(key)) { seen.add(key); g.bentrok.push({ tanggal: d, a, b }); } } }
+    // kalender yang akan habis tanpa pengganti
+    for (const it of g.segera) if (it.jenis === 'kalender pendidikan' && !this.items.some(x => x.jenis === 'kalender pendidikan' && x.status !== 'ditolak' && x.mulai > it.sampai)) g.belumAda.push({ jenis: 'kalender pendidikan', setelah: it.sampai });
+    return g;
+  }
+}
+
+// ---------- jawaban terpadu: Data Pokok (kalender/dokumen, roster berversi) + Informasi Terkini ----------
+const ISYARAT_TANGGAL = /\b(libur|kalender|ada apa|kegiatan|ujian|masuk sekolah|hari sekolah|sekolah tidak|hari efektif)\b/;
+function dataPada(book, P, iso) { const r = P.rosterPada(iso); return C.buildData(r ? { ...book, Roster_Kode: r.roster } : book); }
+function jawabTerpadu(teks, now, { book, P, T }) {
+  const t = C.norm(teks); const tt = TK.tanggalTarget(t, now); const iso = tglLokal(tt.d); const lampau = iso < tglLokal(now);
+  const D = dataPada(book, P, iso);
+  const s = new C.Sesi(); s.dengar('robi', 0);
+  if (ISYARAT_TANGGAL.test(t) && !/\barsip\b/.test(t)) {
+    const { entri, bentrok } = P.tanggalPada(iso);
+    if (entri.length) {
+      const label = tt.bawaan ? 'hari ini (' + tglTeks(iso) + ')' : tglTeks(iso);
+      let teksJ;
+      if (bentrok.length) {
+        const [a, b] = bentrok[0];
+        teksJ = `Ada dua ketentuan berbeda untuk ${label}. Menurut ${a.sumber.judul} (${a.sumber.dasar}, ${a.sumber.penerbit}): ${a.keterangan} (${a.jenis}). Menurut ${b.sumber.judul} (${b.sumber.dasar}, ${b.sumber.penerbit}): ${b.keterangan} (${b.jenis}). Untuk kepastian, silakan konfirmasi ke staf kantor.`;
+      } else teksJ = entri.map(e => `Menurut ${e.sumber.judul} (${e.sumber.dasar}), ${label}: ${e.keterangan} (${e.jenis}).`).join(' ');
+      const info = T.untuk(tt.d, now).filter(e => ['LIBUR', 'PULANG', 'MASUK'].includes(e.analisis.efek)).filter(e => lampau || e.statusSaatIni === 'aktif');
+      if (info.length) teksJ += ` Namun berdasarkan informasi terkini dengan dasar ${info[0].dasar}, ${lampau ? 'pada tanggal itu' : 'berlaku'}: ${info[0].teks}.`;
+      return { intent: 'KALENDER', text: teksJ, sumber: entri.map(e => e.sumber.id), bentrok: bentrok.length > 0 };
+    }
+  }
+  const r = TK.proses(teks, s, now, D, T);
+  return { ...r, roster: (P.rosterPada(iso) || {}).id || null };
+}
+
+module.exports = { Pokok, jawabTerpadu, dataPada };
+
+__m['./pokok.js']=module.exports;})();
+var __BUKU_BAWAAN={"Kelas":[{"kode":"VII-1","nama":"VII Analyst"},{"kode":"VII-2","nama":"VII Coding"},{"kode":"VII-3","nama":"VII Designer"},{"kode":"VII-4","nama":"VII Developer"},{"kode":"VII-5","nama":"VII Engineer"},{"kode":"VII-6","nama":"VII Programmer"},{"kode":"VII-7","nama":"VII Webmaster"},{"kode":"VIII-1","nama":"VIII Java Script"},{"kode":"VIII-2","nama":"VIII PHP"},{"kode":"VIII-3","nama":"VIII C++"},{"kode":"VIII-4","nama":"VIII Pascal"},{"kode":"VIII-5","nama":"VIII Visual Basic"},{"kode":"VIII-6","nama":"VIII Ruby"},{"kode":"IX-1","nama":"IX Algoritma"},{"kode":"IX-2","nama":"IX Biner"},{"kode":"IX-3","nama":"IX Cloud"},{"kode":"IX-4","nama":"IX Data Base"}],"Kode_Guru":[{"kode":1,"nama":"Rahmat Perdana, S.Kom"},{"kode":2,"nama":"Hj. Syarkiah, S.Pd"},{"kode":3,"nama":"Dra. Hj. Hasnawati M"},{"kode":4,"nama":"Hj. Nuraini, S.Pd"},{"kode":5,"nama":"Hj. Hartina, S.Pd"},{"kode":6,"nama":"Hj. Fatmawati AM Dg Ide, S.Pd"},{"kode":7,"nama":"H. Abdul Malik Ranru, S.Pd, M.Pd"},{"kode":8,"nama":"Hj. Sokhrah, S.Pd"},{"kode":9,"nama":"Hj. Nuralam, S.Si, M.Pd"},{"kode":10,"nama":"Hj. Juwita Sain, S.Pd"},{"kode":11,"nama":"Nirwana, S.Pd, M.Pd"},{"kode":12,"nama":"Hj. Nuryani K, S.Ag"},{"kode":13,"nama":"Hj. Nurhayati, S.Pd"},{"kode":14,"nama":"Hj. Bahriani, S.Pd"},{"kode":15,"nama":"Heriyanti Ali Pariwusi, S.Pd"},{"kode":16,"nama":"Zulkarnain Mansyur, S.Ag, M.Pd.I"},{"kode":17,"nama":"Aifah, S.Kom"},{"kode":18,"nama":"Mawardi, S.Pd"},{"kode":19,"nama":"Abd. Jalil Thamrin, S.Pd"},{"kode":20,"nama":"Darmini Bakri, S.Ag"},{"kode":21,"nama":"Sahrun Nur, S.Pd"},{"kode":22,"nama":"H. Syahruddin, S.Pd"},{"kode":23,"nama":"Rukayah, S.Pd"},{"kode":24,"nama":"Chandra Amiruddin, S.Pd"},{"kode":25,"nama":"Rahmaniar BM, S.Pd"},{"kode":26,"nama":"Sarina Rasyid, ST"},{"kode":27,"nama":"Nurul Huda, S.Pd"},{"kode":28,"nama":"Rahma, S.Pd"},{"kode":29,"nama":"Munawir Mahmuddin, S.Pd"},{"kode":30,"nama":"Rizky Aulia Ananda P., S.Pd"},{"kode":31,"nama":"Yanti Supri, S.Sos"},{"kode":32,"nama":"Renaldi Darmadi, S.Pd"}],"Kode_Mapel":[{"kode":"A","nama":"Pendidikan Agama dan Budi Pekerti"},{"kode":"B","nama":"PPKn"},{"kode":"C","nama":"Bahasa Indonesia"},{"kode":"D","nama":"Matematika"},{"kode":"E","nama":"IPA"},{"kode":"F","nama":"IPS"},{"kode":"G","nama":"Bahasa Inggris"},{"kode":"H","nama":"PJOK (Penjas Orkes)"},{"kode":"J","nama":"Seni Budaya"},{"kode":"K","nama":"Informatika"},{"kode":"L","nama":"Bahasa Daerah"}],"Jam_Pelajaran":[{"hari":"Senin","jam_ke":0,"mulai":"07.00","selesai":"07.30","kegiatan":"Upacara bendera"},{"hari":"Senin","jam_ke":1,"mulai":"07.30","selesai":"08.10","kegiatan":"Upacara bendera"},{"hari":"Senin","jam_ke":2,"mulai":"08.10","selesai":"08.50","kegiatan":""},{"hari":"Senin","jam_ke":3,"mulai":"08.50","selesai":"09.30","kegiatan":""},{"hari":"Senin","jam_ke":4,"mulai":"09.30","selesai":"10.10","kegiatan":""},{"hari":"Senin","jam_ke":5,"mulai":"10.40","selesai":"11.20","kegiatan":""},{"hari":"Senin","jam_ke":6,"mulai":"11.20","selesai":"12.00","kegiatan":""},{"hari":"Senin","jam_ke":7,"mulai":"12.00","selesai":"12.30","kegiatan":""},{"hari":"Senin","jam_ke":8,"mulai":"12.30","selesai":"13.10","kegiatan":""},{"hari":"Selasa","jam_ke":1,"mulai":"07.30","selesai":"08.10","kegiatan":""},{"hari":"Selasa","jam_ke":2,"mulai":"08.10","selesai":"08.50","kegiatan":""},{"hari":"Selasa","jam_ke":3,"mulai":"08.50","selesai":"09.30","kegiatan":""},{"hari":"Selasa","jam_ke":4,"mulai":"09.30","selesai":"10.10","kegiatan":""},{"hari":"Selasa","jam_ke":5,"mulai":"10.40","selesai":"11.20","kegiatan":""},{"hari":"Selasa","jam_ke":6,"mulai":"11.20","selesai":"12.00","kegiatan":""},{"hari":"Selasa","jam_ke":7,"mulai":"12.00","selesai":"12.30","kegiatan":""},{"hari":"Selasa","jam_ke":8,"mulai":"12.30","selesai":"13.10","kegiatan":""},{"hari":"Rabu","jam_ke":1,"mulai":"07.30","selesai":"08.10","kegiatan":""},{"hari":"Rabu","jam_ke":2,"mulai":"08.10","selesai":"08.50","kegiatan":""},{"hari":"Rabu","jam_ke":3,"mulai":"08.50","selesai":"09.30","kegiatan":""},{"hari":"Rabu","jam_ke":4,"mulai":"09.30","selesai":"10.10","kegiatan":""},{"hari":"Rabu","jam_ke":5,"mulai":"10.40","selesai":"11.20","kegiatan":""},{"hari":"Rabu","jam_ke":6,"mulai":"11.20","selesai":"12.00","kegiatan":""},{"hari":"Rabu","jam_ke":7,"mulai":"12.00","selesai":"12.30","kegiatan":""},{"hari":"Rabu","jam_ke":8,"mulai":"12.30","selesai":"13.10","kegiatan":""},{"hari":"Kamis","jam_ke":1,"mulai":"07.30","selesai":"08.10","kegiatan":""},{"hari":"Kamis","jam_ke":2,"mulai":"08.10","selesai":"08.50","kegiatan":""},{"hari":"Kamis","jam_ke":3,"mulai":"08.50","selesai":"09.30","kegiatan":""},{"hari":"Kamis","jam_ke":4,"mulai":"09.30","selesai":"10.10","kegiatan":""},{"hari":"Kamis","jam_ke":5,"mulai":"10.40","selesai":"11.20","kegiatan":""},{"hari":"Kamis","jam_ke":6,"mulai":"11.20","selesai":"12.00","kegiatan":""},{"hari":"Kamis","jam_ke":7,"mulai":"12.00","selesai":"12.30","kegiatan":""},{"hari":"Kamis","jam_ke":8,"mulai":"12.30","selesai":"13.10","kegiatan":""},{"hari":"Jumat","jam_ke":1,"mulai":"07.30","selesai":"08.10","kegiatan":"Materi Agama"},{"hari":"Jumat","jam_ke":2,"mulai":"08.10","selesai":"08.50","kegiatan":"Materi Agama"},{"hari":"Jumat","jam_ke":3,"mulai":"08.50","selesai":"09.30","kegiatan":"Materi Agama"},{"hari":"Jumat","jam_ke":4,"mulai":"09.45","selesai":"10.25","kegiatan":""},{"hari":"Jumat","jam_ke":5,"mulai":"10.25","selesai":"11.15","kegiatan":""},{"hari":"Sabtu","jam_ke":1,"mulai":"07.30","selesai":"08.10","kegiatan":""},{"hari":"Sabtu","jam_ke":2,"mulai":"08.10","selesai":"08.50","kegiatan":""},{"hari":"Sabtu","jam_ke":3,"mulai":"08.50","selesai":"09.30","kegiatan":""},{"hari":"Sabtu","jam_ke":4,"mulai":"09.30","selesai":"10.10","kegiatan":""},{"hari":"Sabtu","jam_ke":5,"mulai":"10.40","selesai":"11.20","kegiatan":""},{"hari":"Sabtu","jam_ke":6,"mulai":"11.20","selesai":"12.00","kegiatan":""},{"hari":"Sabtu","jam_ke":7,"mulai":"12.00","selesai":"12.30","kegiatan":""},{"hari":"Sabtu","jam_ke":8,"mulai":"12.30","selesai":"13.10","kegiatan":""},{"hari":"Senin","jam_ke":null,"mulai":"10.10","selesai":"10.40","kegiatan":"Istirahat"},{"hari":"Senin","jam_ke":null,"mulai":"13.10","selesai":"13.50","kegiatan":"Shalat berjamaah"},{"hari":"Jumat","jam_ke":null,"mulai":"09.30","selesai":"09.45","kegiatan":"Istirahat"},{"hari":"Selasa","jam_ke":null,"mulai":"10.10","selesai":"10.40","kegiatan":"Istirahat"},{"hari":"Selasa","jam_ke":null,"mulai":"13.10","selesai":"13.50","kegiatan":"Shalat berjamaah"},{"hari":"Rabu","jam_ke":null,"mulai":"10.10","selesai":"10.40","kegiatan":"Istirahat"},{"hari":"Rabu","jam_ke":null,"mulai":"13.10","selesai":"13.50","kegiatan":"Shalat berjamaah"},{"hari":"Kamis","jam_ke":null,"mulai":"10.10","selesai":"10.40","kegiatan":"Istirahat"},{"hari":"Kamis","jam_ke":null,"mulai":"13.10","selesai":"13.50","kegiatan":"Shalat berjamaah"},{"hari":"Sabtu","jam_ke":null,"mulai":"10.10","selesai":"10.40","kegiatan":"Istirahat"},{"hari":"Sabtu","jam_ke":null,"mulai":"13.10","selesai":"13.50","kegiatan":"Shalat berjamaah"}],"Roster_Kode":[{"hari":"Senin","jam_ke":2,"VII-1":"H29","VII-2":"D24","VII-3":"C27","VII-4":"B3","VII-5":"J32","VII-6":"E2","VII-7":"F22","VIII-1":"H18","VIII-2":"B31","VIII-3":"A20","VIII-4":"F23","VIII-5":"J30","VIII-6":"D26","IX-1":"E9","IX-2":"L28","IX-3":"D10","IX-4":"J15"},{"hari":"Senin","jam_ke":3,"VII-1":"H29","VII-2":"D24","VII-3":"C27","VII-4":"B3","VII-5":"J32","VII-6":"E2","VII-7":"F22","VIII-1":"H18","VIII-2":"B31","VIII-3":"A20","VIII-4":"F23","VIII-5":"J30","VIII-6":"D26","IX-1":"E9","IX-2":"L28","IX-3":"D10","IX-4":"J15"},{"hari":"Senin","jam_ke":4,"VII-1":"H29","VII-2":"D24","VII-3":"A16","VII-4":"B3","VII-5":"J32","VII-6":"E2","VII-7":"K17","VIII-1":"H18","VIII-2":"B31","VIII-3":"A20","VIII-4":"E5","VIII-5":"J30","VIII-6":"D26","IX-1":"E9","IX-2":"K21","IX-3":"D10","IX-4":"J15"},{"hari":"Senin","jam_ke":5,"VII-1":"F4","VII-2":"F22","VII-3":"A16","VII-4":"C27","VII-5":"C28","VII-6":"G25","VII-7":"K17","VIII-1":"F23","VIII-2":"G19","VIII-3":"E7","VIII-4":"E5","VIII-5":"G12","VIII-6":"C14","IX-1":"C8","IX-2":"K21","IX-3":"G6","IX-4":"D10"},{"hari":"Senin","jam_ke":6,"VII-1":"F4","VII-2":"F22","VII-3":"A16","VII-4":"C27","VII-5":"C28","VII-6":"G25","VII-7":"K17","VIII-1":"F23","VIII-2":"G19","VIII-3":"E7","VIII-4":"E5","VIII-5":"G12","VIII-6":"C14","IX-1":"C8","IX-2":"K21","IX-3":"G6","IX-4":"D10"},{"hari":"Senin","jam_ke":7,"VII-1":"C27","VII-2":"G11","VII-3":"E2","VII-4":"G19","VII-5":"L25","VII-6":"D24","VII-7":"C28","VIII-1":"D26","VIII-2":"C13","VIII-3":"G12","VIII-4":"L32","VIII-5":"C14","VIII-6":"F23","IX-1":"G6","IX-2":"F4","IX-3":"E9","IX-4":"C8"},{"hari":"Senin","jam_ke":8,"VII-1":"C27","VII-2":"G11","VII-3":"E2","VII-4":"G19","VII-5":"L25","VII-6":"D24","VII-7":"C28","VIII-1":"D26","VIII-2":"C13","VIII-3":"G12","VIII-4":"L32","VIII-5":"C14","VIII-6":"F23","IX-1":"G6","IX-2":"F4","IX-3":"E9","IX-4":"C8"},{"hari":"Selasa","jam_ke":1,"VII-1":"K21","VII-2":"A16","VII-3":"F22","VII-4":"C27","VII-5":"H29","VII-6":"E2","VII-7":"G25","VIII-1":"E7","VIII-2":"H18","VIII-3":"B31","VIII-4":"G12","VIII-5":"C14","VIII-6":"L32","IX-1":"C8","IX-2":"J15","IX-3":"E9","IX-4":"L28"},{"hari":"Selasa","jam_ke":2,"VII-1":"K21","VII-2":"A16","VII-3":"F22","VII-4":"C27","VII-5":"H29","VII-6":"E2","VII-7":"G25","VIII-1":"E7","VIII-2":"H18","VIII-3":"B31","VIII-4":"G12","VIII-5":"C14","VIII-6":"L32","IX-1":"C8","IX-2":"J15","IX-3":"E9","IX-4":"L28"},{"hari":"Selasa","jam_ke":3,"VII-1":"K21","VII-2":"A16","VII-3":"D24","VII-4":"E2","VII-5":"K17","VII-6":"B3","VII-7":"H29","VIII-1":"C13","VIII-2":"D26","VIII-3":"B31","VIII-4":"H18","VIII-5":"E5","VIII-6":"A20","IX-1":"G6","IX-2":"J15","IX-3":"E9","IX-4":"C8"},{"hari":"Selasa","jam_ke":4,"VII-1":"A16","VII-2":"C27","VII-3":"D24","VII-4":"E2","VII-5":"K17","VII-6":"B3","VII-7":"H29","VIII-1":"C13","VIII-2":"D26","VIII-3":"E7","VIII-4":"H18","VIII-5":"E5","VIII-6":"A20","IX-1":"G6","IX-2":"D10","IX-3":"J15","IX-4":"C8"},{"hari":"Selasa","jam_ke":5,"VII-1":"A16","VII-2":"C27","VII-3":"D24","VII-4":"F22","VII-5":"K17","VII-6":"B3","VII-7":"H29","VIII-1":"G19","VIII-2":"D26","VIII-3":"E7","VIII-4":"H18","VIII-5":"E5","VIII-6":"A20","IX-1":"L28","IX-2":"D10","IX-3":"J15","IX-4":"F4"},{"hari":"Selasa","jam_ke":6,"VII-1":"A16","VII-2":"K21","VII-3":"B31","VII-4":"F22","VII-5":"H29","VII-6":"K17","VII-7":"B3","VIII-1":"G19","VIII-2":"H18","VIII-3":"E7","VIII-4":"D26","VIII-5":"A20","VIII-6":"J30","IX-1":"L28","IX-2":"D10","IX-3":"J15","IX-4":"F4"},{"hari":"Selasa","jam_ke":7,"VII-1":"C27","VII-2":"K21","VII-3":"B31","VII-4":"D24","VII-5":"E2","VII-6":"K17","VII-7":"B3","VIII-1":"F23","VIII-2":"C13","VIII-3":"C14","VIII-4":"D26","VIII-5":"A20","VIII-6":"J30","IX-1":"F4","IX-2":"C8","IX-3":"D10","IX-4":"E9"},{"hari":"Selasa","jam_ke":8,"VII-1":"C27","VII-2":"K21","VII-3":"B31","VII-4":"D24","VII-5":"E2","VII-6":"K17","VII-7":"B3","VIII-1":"F23","VIII-2":"C13","VIII-3":"C14","VIII-4":"D26","VIII-5":"A20","VIII-6":"J30","IX-1":"F4","IX-2":"C8","IX-3":"D10","IX-4":"E9"},{"hari":"Rabu","jam_ke":1,"VII-1":"D10","VII-2":"J15","VII-3":"G11","VII-4":"L25","VII-5":"D24","VII-6":"F22","VII-7":"A16","VIII-1":"G19","VIII-2":"E7","VIII-3":"D26","VIII-4":"B31","VIII-5":"F23","VIII-6":"H29","IX-1":"E9","IX-2":"H18","IX-3":"C8","IX-4":"G6"},{"hari":"Rabu","jam_ke":2,"VII-1":"D10","VII-2":"J15","VII-3":"G11","VII-4":"L25","VII-5":"D24","VII-6":"F22","VII-7":"A16","VIII-1":"G19","VIII-2":"E7","VIII-3":"D26","VIII-4":"B31","VIII-5":"F23","VIII-6":"H29","IX-1":"E9","IX-2":"H18","IX-3":"C8","IX-4":"G6"},{"hari":"Rabu","jam_ke":3,"VII-1":"D10","VII-2":"J15","VII-3":"F22","VII-4":"E2","VII-5":"G19","VII-6":"J32","VII-7":"A16","VIII-1":"E7","VIII-2":"C13","VIII-3":"C14","VIII-4":"B31","VIII-5":"E5","VIII-6":"K17","IX-1":"B3","IX-2":"A20","IX-3":"K21","IX-4":"H18"},{"hari":"Rabu","jam_ke":4,"VII-1":"G11","VII-2":"D24","VII-3":"F22","VII-4":"E2","VII-5":"G19","VII-6":"J32","VII-7":"E9","VIII-1":"E7","VIII-2":"C13","VIII-3":"C14","VIII-4":"D26","VIII-5":"E5","VIII-6":"K17","IX-1":"B3","IX-2":"A20","IX-3":"K21","IX-4":"H18"},{"hari":"Rabu","jam_ke":5,"VII-1":"G11","VII-2":"D24","VII-3":"L25","VII-4":"E2","VII-5":"C28","VII-6":"J32","VII-7":"E9","VIII-1":"E7","VIII-2":"G19","VIII-3":"F23","VIII-4":"D26","VIII-5":"C14","VIII-6":"K17","IX-1":"B3","IX-2":"A20","IX-3":"K21","IX-4":"D10"},{"hari":"Rabu","jam_ke":6,"VII-1":"E2","VII-2":"B31","VII-3":"L25","VII-4":"J15","VII-5":"C28","VII-6":"A16","VII-7":"E9","VIII-1":"J30","VIII-2":"G19","VIII-3":"F23","VIII-4":"K17","VIII-5":"C14","VIII-6":"H29","IX-1":"A20","IX-2":"H18","IX-3":"B3","IX-4":"D10"},{"hari":"Rabu","jam_ke":7,"VII-1":"E2","VII-2":"B31","VII-3":"C27","VII-4":"J15","VII-5":"F22","VII-6":"A16","VII-7":"D24","VIII-1":"J30","VIII-2":"F23","VIII-3":"L32","VIII-4":"K17","VIII-5":"D26","VIII-6":"C14","IX-1":"A20","IX-2":"G6","IX-3":"B3","IX-4":"D10"},{"hari":"Rabu","jam_ke":8,"VII-1":"E2","VII-2":"B31","VII-3":"C27","VII-4":"J15","VII-5":"F22","VII-6":"A16","VII-7":"D24","VIII-1":"J30","VIII-2":"F23","VIII-3":"L32","VIII-4":"K17","VIII-5":"D26","VIII-6":"C14","IX-1":"A20","IX-2":"G6","IX-3":"B3","IX-4":"H18"},{"hari":"Kamis","jam_ke":1,"VII-1":"L25","VII-2":"C27","VII-3":"G11","VII-4":"G19","VII-5":"A16","VII-6":"H29","VII-7":"C28","VIII-1":"C13","VIII-2":"L32","VIII-3":"H18","VIII-4":"C14","VIII-5":"F23","VIII-6":"G12","IX-1":"J15","IX-2":"E9","IX-3":"F4","IX-4":"B3"},{"hari":"Kamis","jam_ke":2,"VII-1":"L25","VII-2":"C27","VII-3":"G11","VII-4":"G19","VII-5":"A16","VII-6":"H29","VII-7":"C28","VIII-1":"C13","VIII-2":"L32","VIII-3":"H18","VIII-4":"C14","VIII-5":"F23","VIII-6":"G12","IX-1":"J15","IX-2":"E9","IX-3":"F4","IX-4":"B3"},{"hari":"Kamis","jam_ke":3,"VII-1":"E2","VII-2":"F22","VII-3":"H29","VII-4":"K21","VII-5":"A16","VII-6":"D24","VII-7":"L27","VIII-1":"K17","VIII-2":"E7","VIII-3":"D26","VIII-4":"J30","VIII-5":"H18","VIII-6":"B31","IX-1":"J15","IX-2":"E9","IX-3":"C8","IX-4":"B3"},{"hari":"Kamis","jam_ke":4,"VII-1":"E2","VII-2":"F22","VII-3":"H29","VII-4":"K21","VII-5":"G19","VII-6":"D24","VII-7":"L27","VIII-1":"K17","VIII-2":"E7","VIII-3":"D26","VIII-4":"J30","VIII-5":"H18","VIII-6":"B31","IX-1":"D10","IX-2":"B3","IX-3":"C8","IX-4":"F4"},{"hari":"Kamis","jam_ke":5,"VII-1":"C27","VII-2":"G11","VII-3":"E2","VII-4":"K21","VII-5":"G19","VII-6":"D24","VII-7":"G25","VIII-1":"K17","VIII-2":"E7","VIII-3":"D26","VIII-4":"J30","VIII-5":"H18","VIII-6":"B31","IX-1":"D10","IX-2":"B3","IX-3":"L28","IX-4":"F4"},{"hari":"Kamis","jam_ke":6,"VII-1":"C27","VII-2":"G11","VII-3":"E2","VII-4":"A16","VII-5":"D24","VII-6":"H29","VII-7":"G25","VIII-1":"B31","VIII-2":"K17","VIII-3":"H18","VIII-4":"A20","VIII-5":"D26","VIII-6":"E5","IX-1":"D10","IX-2":"B3","IX-3":"L28","IX-4":"K21"},{"hari":"Kamis","jam_ke":7,"VII-1":"F4","VII-2":"L25","VII-3":"E2","VII-4":"A16","VII-5":"D24","VII-6":"C28","VII-7":"F22","VIII-1":"B31","VIII-2":"K17","VIII-3":"G12","VIII-4":"A20","VIII-5":"D26","VIII-6":"E5","IX-1":"C8","IX-2":"D10","IX-3":"G6","IX-4":"K21"},{"hari":"Kamis","jam_ke":8,"VII-1":"F4","VII-2":"L25","VII-3":"H29","VII-4":"A16","VII-5":"D24","VII-6":"C28","VII-7":"F22","VIII-1":"B31","VIII-2":"K17","VIII-3":"G12","VIII-4":"A20","VIII-5":"D26","VIII-6":"E5","IX-1":"C8","IX-2":"D10","IX-3":"G6","IX-4":"K21"},{"hari":"Jumat","jam_ke":4,"VII-1":"G11","VII-2":"E2","VII-3":"D24","VII-4":"C27","VII-5":"F22","VII-6":"C28","VII-7":"E9","VIII-1":"L32","VIII-2":"D26","VIII-3":"F23","VIII-4":"C14","VIII-5":"G12","VIII-6":"E5","IX-1":"D10","IX-2":"C8","IX-3":"F4","IX-4":"G6"},{"hari":"Jumat","jam_ke":5,"VII-1":"G11","VII-2":"E2","VII-3":"D24","VII-4":"C27","VII-5":"F22","VII-6":"C28","VII-7":"E9","VIII-1":"L32","VIII-2":"D26","VIII-3":"F23","VIII-4":"C14","VIII-5":"G12","VIII-6":"E5","IX-1":"D10","IX-2":"C8","IX-3":"F4","IX-4":"G6"},{"hari":"Sabtu","jam_ke":1,"VII-1":"D10","VII-2":"H29","VII-3":"K21","VII-4":"F22","VII-5":"B3","VII-6":"L27","VII-7":"C28","VIII-1":"A16","VIII-2":"J30","VIII-3":"K17","VIII-4":"E5","VIII-5":"L32","VIII-6":"C14","IX-1":"H18","IX-2":"E9","IX-3":"C8","IX-4":"A20"},{"hari":"Sabtu","jam_ke":2,"VII-1":"D10","VII-2":"H29","VII-3":"K21","VII-4":"F22","VII-5":"B3","VII-6":"L27","VII-7":"C28","VIII-1":"A16","VIII-2":"J30","VIII-3":"K17","VIII-4":"E5","VIII-5":"L32","VIII-6":"C14","IX-1":"H18","IX-2":"E9","IX-3":"C8","IX-4":"A20"},{"hari":"Sabtu","jam_ke":3,"VII-1":"J15","VII-2":"E2","VII-3":"K21","VII-4":"H29","VII-5":"B3","VII-6":"F22","VII-7":"D24","VIII-1":"A16","VIII-2":"J30","VIII-3":"K17","VIII-4":"F23","VIII-5":"B31","VIII-6":"G12","IX-1":"F4","IX-2":"C8","IX-3":"H18","IX-4":"A20"},{"hari":"Sabtu","jam_ke":4,"VII-1":"J15","VII-2":"E2","VII-3":"C27","VII-4":"H29","VII-5":"C28","VII-6":"F22","VII-7":"D24","VIII-1":"D26","VIII-2":"A16","VIII-3":"J30","VIII-4":"F23","VIII-5":"B31","VIII-6":"G12","IX-1":"F4","IX-2":"C8","IX-3":"H18","IX-4":"E9"},{"hari":"Sabtu","jam_ke":5,"VII-1":"J15","VII-2":"E2","VII-3":"C27","VII-4":"H29","VII-5":"C28","VII-6":"G25","VII-7":"D24","VIII-1":"D26","VIII-2":"A16","VIII-3":"J30","VIII-4":"C14","VIII-5":"B31","VIII-6":"F23","IX-1":"H18","IX-2":"G6","IX-3":"A20","IX-4":"E9"},{"hari":"Sabtu","jam_ke":6,"VII-1":"B31","VII-2":"H29","VII-3":"J15","VII-4":"D24","VII-5":"E2","VII-6":"G25","VII-7":"J32","VIII-1":"D26","VIII-2":"A16","VIII-3":"J30","VIII-4":"C14","VIII-5":"K17","VIII-6":"F23","IX-1":"K21","IX-2":"G6","IX-3":"A20","IX-4":"E9"},{"hari":"Sabtu","jam_ke":7,"VII-1":"B31","VII-2":"C27","VII-3":"J15","VII-4":"D24","VII-5":"E2","VII-6":"C28","VII-7":"J32","VIII-1":"C13","VIII-2":"F23","VIII-3":"C14","VIII-4":"G12","VIII-5":"K17","VIII-6":"D26","IX-1":"K21","IX-2":"F4","IX-3":"A20","IX-4":"C8"},{"hari":"Sabtu","jam_ke":8,"VII-1":"B31","VII-2":"C27","VII-3":"J15","VII-4":"D24","VII-5":"E2","VII-6":"C28","VII-7":"J32","VIII-1":"C13","VIII-2":"F23","VIII-3":"C14","VIII-4":"G12","VIII-5":"K17","VIII-6":"D26","IX-1":"K21","IX-2":"F4","IX-3":"H18","IX-4":"C8"}]};
+</script>
+<script>
+// ===== ROBI 1.1: dasar ROBI Kios 1.0 + cara kerja v2 (Data sekolah, Informasi Terkini, sambung AI otomatis) =====
+(function () {
+  'use strict';
+  const C = __m['./core.js'], TK = __m['./terkini.js'], PK = __m['./pokok.js'];
+  const BUKU = __BUKU_BAWAAN, KUNCI = 'robi.live.inputdata';
+  const VERSI = 'kios-1.1 (cara kerja v2)';
+  const ls = { get(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } }, del(k) { try { localStorage.removeItem(k); } catch (e) {} } };
+  const esc2 = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const HARI = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'], BLN = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+  // ---------- DATA: Buku Data + Data Pokok berversi + Informasi Terkini (dari ekspor menu Input Data) ----------
+  let P, T, sumber;
+  function muat() {
+    P = new PK.Pokok(); const x = ls.get(KUNCI);
+    if (x && x.pokok) Object.assign(P, { items: x.pokok.items || [], seq: x.pokok.seq || 0, putusan: x.pokok.putusan || [], notif: [] });
+    T = new TK.Terkini(PK.dataPada(BUKU, P, C.tglLokal(new Date())));
+    if (x && x.terkini) { T.data = x.terkini.data || []; T.seq = x.terkini.seq || 0; }
+    sumber = x ? 'ekspor menu Input Data ' + (x.diekspor || '') : 'Buku Data bawaan';
+  }
+  muat();
+  function jawabData(q, now = new Date()) { try { return PK.jawabTerpadu(String(q || ''), now, { book: BUKU, P, T }); } catch (e) { return { text: null, intent: 'GALAT' }; } }
+  function infoHariIni() {
+    const now = new Date(), s = new C.Sesi(); s.dengar('robi', 0); const D = PK.dataPada(BUKU, P, C.tglLokal(now));
+    let jam = ''; try { jam = TK.proses('sekarang jam ke berapa', s, now, D, T).text || ''; } catch (e) {}
+    const iso = C.tglLokal(now);
+    const aktif = T.data.filter(e => e.status === 'aktif' && e.mulai <= iso && iso <= e.selesai);
+    let kal = null; for (let i = 0; i < 30 && !kal; i++) { const d = new Date(now); d.setDate(d.getDate() + i); const t = P.tanggalPada(C.tglLokal(d)); if (t.entri.length) kal = { tanggal: C.tglLokal(d), keterangan: t.entri[0].keterangan, jenis: t.entri[0].jenis, dasar: t.entri[0].sumber && t.entri[0].sumber.dasar }; }
+    return { sekarang: `${HARI[now.getDay()]}, ${now.getDate()} ${BLN[now.getMonth()]} ${now.getFullYear()}`, jamPelajaran: jam, pulang: jawabData('hari ini pulang jam berapa', now).text, informasiTerkini: aktif.map(e => ({ isi: e.teks, dasar: e.dasar, berlaku: e.mulai + ' s.d. ' + e.selesai })), kalenderTerdekat: kal };
+  }
+  window.ROBI_V2 = { jawabData, infoHariIni, muat, versi: VERSI };
+  // perbaikan: batas kalimat hanya pada tanda baca yang diikuti spasi/akhir teks, agar "13.50" tidak terpotong dan tidak ada teks yang hilang
+  flushSentences = function (full, final, myTurn) {
+    const rest = full.slice(spokenUpTo); const re = /[.!?…]+(?=\s|$)/g; let m, last = 0;
+    while ((m = re.exec(rest)) !== null) { const end = m.index + m[0].length; if (!final && end === rest.length) break; const kal = rest.slice(last, end); if (kal.trim()) enqueue(kal, myTurn); last = end; }
+    spokenUpTo += last;
+    if (final) { const tail = full.slice(spokenUpTo); if (tail.trim()) enqueue(tail, myTurn); spokenUpTo = full.length; }
+  };
+
+  // ---------- 1. JALUR CEPAT: jadwal, roster, jam pulang, kalender, informasi terkini dijawab langsung dari Data ----------
+  const _hu = handleUser;
+  handleUser = async function (text) {
+    const r = jawabData(text);
+    if (!(r.text && r.intent !== 'LLM')) return _hu(text);
+    clearTimeout(sesiTimer); if (KIOSK && sesi === 'siaga') { sesi = 'aktif'; sesiStart = performance.now(); kiosUI(); } lastSpoken = '';
+    addMsg('user', text); stopSpeaking(); const myTurn = ++turnId; setPhase('thinking');
+    history.push({ role: 'user', content: text }); addMsg('assistant', r.text + '  [Sumber: ' + (r.sumber ? 'Data Pokok' : r.dipakai ? 'Data sekolah + Informasi Terkini' : 'Data sekolah') + ']');
+    history.push({ role: 'assistant', content: r.text });
+    answerDone = false; pending = 0; spokenUpTo = 0; speakStarted = false;
+    flushSentences(r.text, true, myTurn); answerDone = true; maybeFinish();
+  };
+  // ---------- 2. ALAT UNTUK AI: data_sekolah + info_hari_ini ----------
+  TOOLS.unshift(
+    { name: 'data_sekolah', description: 'Data sekolah resmi yang sudah disetujui Kepala Sekolah: roster berversi, jam pelajaran, jam masuk/pulang, guru dan mapel per kelas, kalender pendidikan, libur, kegiatan, Informasi Terkini (didahulukan di atas jadwal rutin), dan arsip untuk tanggal lampau. WAJIB dipakai untuk setiap pertanyaan jadwal, roster, guru mengajar, pulang/masuk, libur, kalender. Isi pertanyaan lengkap (kelas/guru/tanggal).', input_schema: { type: 'object', properties: { pertanyaan: { type: 'string' } }, required: ['pertanyaan'] } },
+    { name: 'info_hari_ini', description: 'Ringkasan hari ini: jam pelajaran yang berjalan, jam pulang, Informasi Terkini yang berlaku, kegiatan kalender terdekat.', input_schema: { type: 'object', properties: {} } });
+  const _rt = runTool;
+  runTool = function (name, inp) {
+    if (name === 'data_sekolah') { const r = jawabData((inp && inp.pertanyaan) || ''); return r.text && r.intent !== 'LLM' ? { jawaban: r.text, dasar: r.sumber ? 'Data Pokok (kalender/dokumen resmi)' : r.dipakai ? 'Informasi Terkini' : 'Data sekolah', bentrok: !!r.bentrok } : { jawaban: 'TIDAK ADA DI DATA', catatan: 'Coba juga cari_info_sekolah. Bila tetap tidak ada, katakan terus terang dan sarankan bertanya ke Tata Usaha.' }; }
+    if (name === 'info_hari_ini') return infoHariIni();
+    return _rt(name, inp);
+  };
+  // Gemini (cadangan) tidak memakai alat: hasil Data disisipkan lewat cariInfo
+  const _ci = cariInfo;
+  cariInfo = function (q, n) { const h = _ci(q, n); const r = jawabData(q); if (r.text && r.intent !== 'LLM') h.unshift({ judul: 'Data sekolah', isi: r.text, sumber: 'Data sekolah' }); return h; };
+  // aturan Konsep Induk tentang data
+  const _nr = nameRule;
+  nameRule = function () {
+    return _nr() + ' ATURAN DATA SEKOLAH: untuk jadwal, roster, guru mengajar, jam masuk/pulang, libur, kalender, dan informasi terkini, panggil data_sekolah lebih dulu dan jawab berdasarkan hasilnya. ' +
+      'Bila hasilnya memuat "Namun berdasarkan informasi terkini", sampaikan jadwal rutin lalu informasi terkini beserta dasarnya. Bila ada dua ketentuan berbeda, sebutkan keduanya beserta dasarnya dan arahkan ke staf kantor. ' +
+      'Untuk data penting yang perlu validasi, sebut sumbernya. Untuk diskusi dan pengetahuan umum, jawab sebagai rekan diskusi yang berpendidikan; boleh membahas hal yang masih diperdebatkan dengan menyebutnya demikian.';
+  };
+  // ---------- 3. SAMBUNG AI OTOMATIS saat ROBI menyala ----------
+  const pill = document.createElement('div'); pill.id = 'aiPill';
+  pill.style.cssText = 'position:fixed;top:14px;right:14px;z-index:5;padding:6px 14px;border-radius:999px;font:600 13px system-ui,sans-serif;background:rgba(255,255,255,.12);color:#eae6ff;backdrop-filter:blur(6px);pointer-events:none';
+  document.body.appendChild(pill);
+  let aiStat = 'menyambung', aiNama = '', galat = '-', ulangT = null, jalan = null;
+  function tampil() {
+    if (!navigator.onLine) { pill.textContent = '● Luring · layanan data'; pill.style.color = '#ffcf7a'; return; }
+    const t = { menyambung: ['● Menyambung ke AI…', '#cfc6ff'], ok: ['● AI tersambung' + (aiNama ? ' · ' + aiNama : ''), '#5dff9e'], gagal: ['● AI belum tersambung · layanan data', '#ffcf7a'], kosong: ['● Tanpa AI · layanan data', '#ffcf7a'] }[aiStat];
+    pill.textContent = t[0]; pill.style.color = t[1]; pill.title = 'Galat terakhir: ' + galat;
+    const d = document.getElementById('v2Status'); if (d) d.innerHTML = `Versi <b>${VERSI}</b> · AI: <b>${esc2(pill.textContent.replace('● ', ''))}</b> · galat terakhir: ${esc2(galat)}`;
+  }
+  function bungkusAlat() {   // claude.ai: beri alat Data ke Claude
+    if (!sample || sample.external || sample.__v2) return;
+    const nat = sample;
+    const alat = () => TOOLS.filter(t => t.name === 'data_sekolah' || t.name === 'info_hari_ini' || t.name === 'waktu_sekarang' || t.name === 'cari_info_sekolah').map(t => ({ name: t.name, description: t.description, inputSchema: t.input_schema, execute: inp => runTool(t.name, inp) }));
+    const w = (input, opts = {}) => nat(input, Object.assign({}, opts, { tools: opts.tools || alat() }));
+    w.__v2 = true; w.json = nat.json; w.limits = nat.limits; sample = w;
+  }
+  async function sambung() {
+    if (jalan) return jalan;
+    jalan = (async () => {
+      let n = 0; while (!capsReady && n++ < 100) await new Promise(r => setTimeout(r, 100));
+      clearTimeout(ulangT);
+      if (!sample && aiCfg().key) sample = makeExternalSample();
+      bungkusAlat();
+      if (!sample) { aiStat = 'kosong'; tampil(); return false; }
+      aiStat = 'menyambung'; tampil();
+      try {
+        const r = sample.external ? await sample([{ role: 'user', content: '[Instruksi]Balas persis satu kata.[Akhir instruksi] siap' }], { cache: false })
+          : await sample('Balas persis satu kata: siap', { modelTier: 'quick', cache: false, tools: [] });
+        if (!r || !String(r.text || '').trim()) throw { code: 'kosong' };
+        aiNama = sample.external ? (aiUsed || 'AI') : 'Claude'; aiStat = 'ok'; galat = '-'; tampil(); return true;
+      } catch (e) {
+        galat = String((e && (e.code || e.message)) || e);
+        if (e && e.code === 'not_granted') { sample = null; if (aiCfg().key) { jalan = null; return sambung(); } aiStat = 'kosong'; tampil(); return false; }
+        aiStat = 'gagal'; tampil(); ulangT = setTimeout(sambung, e && (e.code === 'bad_key' || e.fatal) ? 30 * 60000 : 60000); return false;
+      }
+    })().finally(() => { jalan = null; });
+    return jalan;
+  }
+  window.addEventListener('online', () => { tampil(); setTimeout(sambung, 1500); });
+  window.addEventListener('offline', () => { aiStat = 'gagal'; tampil(); });
+  // jawaban AI gagal di tengah percakapan -> sambung ulang di latar belakang
+  const _hu2 = handleUser;
+  handleUser = async function (text) { const r = await _hu2(text); if (/Gagal|gagal/.test(($('status') || {}).textContent || '') && aiStat === 'ok') { aiStat = 'gagal'; tampil(); setTimeout(sambung, 5000); } return r; };
+  sambung();
+  // ---------- 4. PENGATURAN: impor Data Pokok & Informasi Terkini ----------
+  const sec = document.createElement('div'); sec.className = 'sec'; sec.id = 'secV2';
+  sec.innerHTML = `<b>DATA SEKOLAH & INFORMASI TERKINI (v2)</b>
+    <div class="row" id="v2Status" style="font-size:12px;display:block"></div>
+    <div class="row" id="v2Data" style="font-size:12px;display:block"></div>
+    <div class="row" style="font-size:12px;display:block;color:#a59dd3">Data Pokok (kalender, roster berversi, dokumen resmi) dan Informasi Terkini diisi dan disetujui Kepala Sekolah di menu Input Data. Impor berkas ekspornya (Data › Ekspor JSON). Yang belum disetujui tidak dipakai.</div>
+    <div class="row"><label class="chip" style="cursor:pointer">Impor ekspor Input Data<input type="file" id="v2File" accept=".json" style="display:none"></label><button class="chip" id="v2Reset">Pakai data bawaan</button><button class="chip" id="v2Sambung">Sambung ulang AI</button></div>
+    <div class="row" id="v2Msg" style="font-size:12px;display:block"></div>
+    <div class="row"><input type="text" id="v2Uji" placeholder="Uji data: mis. kelas pascal besok belajar apa" style="flex:1;min-width:200px"><button class="chip" id="v2UjiBtn">Uji</button></div>
+    <div class="row" id="v2UjiOut" style="font-size:12px;display:block;color:#eae6ff"></div>`;
+  const ai = document.getElementById('secAI'); ai.parentNode.insertBefore(sec, ai);
+  function dataInfo() { const n = P.items.filter(x => x.status === 'disetujui').length, m = T.data.filter(x => x.status === 'aktif').length; document.getElementById('v2Data').innerHTML = `Sumber: <b>${esc2(sumber)}</b> · ${BUKU.Kelas.length} kelas · ${BUKU.Kode_Guru.length} guru · ${n} Data Pokok disetujui · ${m} Informasi Terkini`; }
+  dataInfo(); tampil();
+  document.getElementById('v2File').onchange = async ev => {
+    const f = ev.target.files[0]; ev.target.value = ''; if (!f) return; const out = document.getElementById('v2Msg');
+    try { const j = JSON.parse(await f.text()); if (j.jenis !== 'robi.inputdata' || !j.pokok || !j.terkini) throw new Error('Bukan berkas ekspor menu Input Data');
+      ls.set(KUNCI, { pokok: { items: j.pokok.items, seq: j.pokok.seq, putusan: j.pokok.putusan }, terkini: j.terkini, diekspor: j.diekspor }); muat(); dataInfo(); out.textContent = '✓ Data dimuat.'; out.style.color = '#5dff9e';
+    } catch (e) { out.textContent = 'Gagal: ' + e.message; out.style.color = '#ff8a8a'; }
+  };
+  document.getElementById('v2Reset').onclick = () => { ls.del(KUNCI); muat(); dataInfo(); document.getElementById('v2Msg').textContent = 'Memakai Buku Data bawaan.'; };
+  document.getElementById('v2Sambung').onclick = () => sambung();
+  document.getElementById('v2UjiBtn').onclick = () => { const r = jawabData(document.getElementById('v2Uji').value); document.getElementById('v2UjiOut').textContent = r.text && r.intent !== 'LLM' ? '→ ' + r.text : '→ (bukan pertanyaan data; akan dijawab AI)'; };
+})();
+
+/* === PENYEDIA SUARA ROBI (v1.2) ===
+   Dasar tetap v1.0: suara peramban/Claude lewat say() asli.
+   Lapisan ini menambah penyedia awan (Google Cloud, Azure, ElevenLabs, OpenAI).
+   Kunci API hanya disimpan di localStorage perangkat kios ini, tidak pernah ditanam di berkas. */
+(function () {
+  const $id = id => document.getElementById(id);
+  const LS = 'robi.suara.v1', LSK = 'robi.suara.kunci.', LSP = 'robi.suara.pakai.';
+  const lsJ = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) || d; } catch (_) { return d; } };
+  const lsW = (k, v) => { try { localStorage.setItem(k, typeof v === 'string' ? v : JSON.stringify(v)); } catch (_) {} };
+  const lsD = k => { try { localStorage.removeItem(k); } catch (_) {} };
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const rate = () => +(($id('rate') || {}).value || 1.05), pitch = () => +(($id('pitch') || {}).value || 1.15);
+
+  // ---------- katalog penyedia ----------
+  const PROV = {
+    perangkat: { nama: 'Suara perangkat (Google / Microsoft / Claude)', label: 'Gratis', warna: '#5dff9e',
+      info: 'Memakai pilihan di bagian SUARA di atas. Chrome: "Google Bahasa Indonesia". Edge: Microsoft Gadis/Ardi Natural (paling alami di antara yang gratis). Tanpa kunci, tanpa biaya. Kualitas tergantung peramban.' },
+    google: { nama: 'Google Cloud Text-to-Speech', label: 'Kuota gratis → berbayar', warna: '#ffd166', butuh: ['kunci'],
+      info: 'Standard & WaveNet: gratis 4 juta karakter/bulan, lalu ±US$4 per 1 juta. Chirp 3 HD (paling alami): gratis 1 juta/bulan, lalu ±US$30 per 1 juta. Wajib mengaktifkan penagihan (billing) di Google Cloud. Batasi kunci API ke Text-to-Speech saja.',
+      suara: [['id-ID-Standard-A', 'Standard A · perempuan'], ['id-ID-Standard-B', 'Standard B · laki-laki'], ['id-ID-Standard-C', 'Standard C · laki-laki'], ['id-ID-Standard-D', 'Standard D · perempuan'],
+        ['id-ID-Wavenet-A', 'WaveNet A · perempuan'], ['id-ID-Wavenet-B', 'WaveNet B · laki-laki'], ['id-ID-Wavenet-C', 'WaveNet C · laki-laki'], ['id-ID-Wavenet-D', 'WaveNet D · perempuan'],
+        ['id-ID-Chirp3-HD-Kore', 'Chirp 3 HD Kore · perempuan'], ['id-ID-Chirp3-HD-Aoede', 'Chirp 3 HD Aoede · perempuan'], ['id-ID-Chirp3-HD-Puck', 'Chirp 3 HD Puck · laki-laki'], ['id-ID-Chirp3-HD-Charon', 'Chirp 3 HD Charon · laki-laki']] },
+    azure: { nama: 'Microsoft Azure Speech', label: 'Kuota gratis → berbayar', warna: '#ffd166', butuh: ['kunci', 'region'],
+      info: 'Suara neural Gadis/Ardi (sama dengan Edge, tetapi stabil di peramban apa pun). Tingkat Free (F0): 0,5 juta karakter/bulan gratis. Lewat kuota, pilih tingkat S0 (berbayar per juta karakter, lihat kalkulator Azure).',
+      suara: [['id-ID-GadisNeural', 'Gadis · perempuan'], ['id-ID-ArdiNeural', 'Ardi · laki-laki']] },
+    eleven: { nama: 'ElevenLabs', label: 'Gratis terbatas → berbayar', warna: '#ff9f6e', butuh: ['kunci'],
+      info: 'Sangat ekspresif, bisa klon suara. Free: 10.000 kredit/bulan (±10 menit), tanpa hak komersial, wajib atribusi. Starter US$6/bln (30 ribu kredit), Creator US$22/bln (121 ribu). Klik "Muat daftar" untuk mengambil suara dari akun Bapak.',
+      suara: [['21m00Tcm4TlvDq8ikWAM', 'Rachel (bawaan)'], ['pNInz6obpgDQGcFmaJgB', 'Adam (bawaan)']],
+      model: [['eleven_flash_v2_5', 'Flash v2.5 · cepat, hemat'], ['eleven_multilingual_v2', 'Multilingual v2 · paling halus']] },
+    openai: { nama: 'OpenAI gpt-4o-mini-tts', label: 'Berbayar', warna: '#ff8a8a', butuh: ['kunci'],
+      info: 'Tanpa kuota gratis. Sekitar US$0,015 per menit audio. Bisa diberi instruksi gaya bicara. Logat Indonesianya terdengar sedikit asing pada beberapa suara.',
+      suara: ['alloy', 'ash', 'ballad', 'coral', 'echo', 'fable', 'nova', 'onyx', 'sage', 'shimmer', 'verse'].map(v => [v, v]) }
+  };
+  const BAWAAN = { prov: 'perangkat', google: 'id-ID-Wavenet-A', azure: 'id-ID-GadisNeural', azureRegion: 'southeastasia', eleven: '21m00Tcm4TlvDq8ikWAM', elevenModel: 'eleven_flash_v2_5', openai: 'nova', daftar: {} };
+  let cfg = Object.assign({}, BAWAAN, lsJ(LS, {}));
+  const simpan = () => lsW(LS, cfg);
+  const kunci = p => { try { return localStorage.getItem(LSK + p) || ''; } catch (_) { return ''; } };
+
+  // ---------- catat pemakaian karakter per bulan (pembanding kuota gratis) ----------
+  const bln = () => new Date().toISOString().slice(0, 7);
+  function catat(p, n) { const k = LSP + p, o = lsJ(k, {}); if (o.b !== bln()) { o.b = bln(); o.n = 0; } o.n += n; lsW(k, o); setTimeout(tampilStatus, 0); }
+  function terpakai(p) { const o = lsJ(LSP + p, {}); return o.b === bln() ? o.n : 0; }
+  const KUOTA = { google: (v) => /Chirp/i.test(v) ? 1e6 : 4e6, azure: () => 5e5, eleven: () => 1e4 };
+
+  // ---------- sintesis per penyedia → Blob audio ----------
+  async function gagalHttp(r) { let t = ''; try { t = (await r.text()).slice(0, 160); } catch (_) {} const e = new Error('HTTP ' + r.status + (t ? ': ' + t.replace(/\s+/g, ' ') : '')); e.status = r.status; throw e; }
+  const SINTESIS = {
+    async google(text, sig) {
+      const v = cfg.google, chirp = /Chirp/i.test(v), ac = { audioEncoding: 'MP3' };
+      if (!chirp) ac.speakingRate = rate();
+      if (!chirp) ac.pitch = Math.max(-20, Math.min(20, Math.round((pitch() - 1) * 20)));
+      const r = await fetch('https://texttospeech.googleapis.com/v1/text:synthesize', { method: 'POST', signal: sig,
+        headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': kunci('google') },
+        body: JSON.stringify({ input: { text }, voice: { languageCode: 'id-ID', name: v }, audioConfig: ac }) });
+      if (!r.ok) await gagalHttp(r);
+      const j = await r.json(); const bin = atob(j.audioContent || ''); const u = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+      return new Blob([u], { type: 'audio/mpeg' });
+    },
+    async azure(text, sig) {
+      const pr = n => (n >= 0 ? '+' : '') + n + '%';
+      const ssml = `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="id-ID"><voice name="${esc(cfg.azure)}"><prosody rate="${pr(Math.round((rate() - 1) * 100))}" pitch="${pr(Math.round((pitch() - 1) * 50))}">${esc(text)}</prosody></voice></speak>`;
+      const r = await fetch(`https://${encodeURIComponent(cfg.azureRegion)}.tts.speech.microsoft.com/cognitiveservices/v1`, { method: 'POST', signal: sig,
+        headers: { 'Ocp-Apim-Subscription-Key': kunci('azure'), 'Content-Type': 'application/ssml+xml', 'X-Microsoft-OutputFormat': 'audio-24khz-48kbitrate-mono-mp3' }, body: ssml });
+      if (!r.ok) await gagalHttp(r); return await r.blob();
+    },
+    async eleven(text, sig) {
+      const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(cfg.eleven)}?output_format=mp3_44100_128`, { method: 'POST', signal: sig,
+        headers: { 'xi-api-key': kunci('eleven'), 'Content-Type': 'application/json', Accept: 'audio/mpeg' },
+        body: JSON.stringify({ text, model_id: cfg.elevenModel, language_code: cfg.elevenModel === 'eleven_flash_v2_5' ? 'id' : undefined,
+          voice_settings: { stability: 0.5, similarity_boost: 0.75, speed: Math.max(0.7, Math.min(1.2, rate())) } }) });
+      if (!r.ok) await gagalHttp(r); return await r.blob();
+    },
+    async openai(text, sig) {
+      const r = await fetch('https://api.openai.com/v1/audio/speech', { method: 'POST', signal: sig,
+        headers: { Authorization: 'Bearer ' + kunci('openai'), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: 'gpt-4o-mini-tts', voice: cfg.openai, input: text, response_format: 'mp3', speed: rate(),
+          instructions: 'Berbicaralah dalam bahasa Indonesia baku berlogat Indonesia, ramah, jelas, dan bersemangat seperti robot pemandu sekolah yang menyapa siswa SMP.' }) });
+      if (!r.ok) await gagalHttp(r); return await r.blob();
+    }
+  };
+  // daftar suara dari akun/penyedia (opsional, menggantikan daftar bawaan)
+  const DAFTAR = {
+    async google() { const r = await fetch('https://texttospeech.googleapis.com/v1/voices?languageCode=id-ID', { headers: { 'X-Goog-Api-Key': kunci('google') } }); if (!r.ok) await gagalHttp(r);
+      return ((await r.json()).voices || []).filter(v => /^id-ID/.test(v.name)).map(v => [v.name, v.name.replace('id-ID-', '') + ' · ' + (v.ssmlGender === 'FEMALE' ? 'perempuan' : v.ssmlGender === 'MALE' ? 'laki-laki' : '-')]); },
+    async azure() { const r = await fetch(`https://${encodeURIComponent(cfg.azureRegion)}.tts.speech.microsoft.com/cognitiveservices/voices/list`, { headers: { 'Ocp-Apim-Subscription-Key': kunci('azure') } }); if (!r.ok) await gagalHttp(r);
+      return (await r.json()).filter(v => /^(id-ID|ms-MY|jv-ID|su-ID)/.test(v.Locale)).map(v => [v.ShortName, v.ShortName + ' · ' + (v.Gender === 'Female' ? 'perempuan' : 'laki-laki')]); },
+    async eleven() { const r = await fetch('https://api.elevenlabs.io/v1/voices', { headers: { 'xi-api-key': kunci('eleven') } }); if (!r.ok) await gagalHttp(r);
+      return ((await r.json()).voices || []).map(v => [v.voice_id, v.name + (v.category ? ' · ' + v.category : '')]); }
+  };
+
+  // ---------- antrean putar berurutan (setiap kalimat di-prefetch sejak dipanggil) ----------
+  const cache = new Map(); // teks|suara → Blob (maks 40)
+  let antre = [], main = null, audio = null, ctl = null, galatTerakhir = '-', galatBeruntun = 0;
+  const sayDasar = window.say; // say() v1.0 (+ pembungkus kios) — dipakai untuk suara perangkat & cadangan
+  const kunciCache = (p, t) => p + '|' + (p === 'eleven' ? cfg.eleven + cfg.elevenModel : cfg[p]) + '|' + rate() + '|' + pitch() + '|' + t;
+  function ambil(p, text) {
+    const k = kunciCache(p, text); if (cache.has(k)) return Promise.resolve(cache.get(k));
+    if (!ctl) ctl = new AbortController(); const sig = ctl.signal;
+    return SINTESIS[p](text, sig).then(b => { cache.set(k, b); if (cache.size > 40) cache.delete(cache.keys().next().value); catat(p, text.length); return b; });
+  }
+  function selesaiItem(it) { if (it.fin) return; it.fin = true; talking = false; if (audio) { audio.onended = audio.onerror = null; }
+    if (it.url) { try { URL.revokeObjectURL(it.url); } catch (_) {} } lastSpokenEnd = performance.now(); main = null; it.done(); putar(); }
+  function putar() {
+    if (main || !antre.length) return; const it = main = antre.shift();
+    it.janji.then(blob => {
+      if (it.batal) return;
+      galatBeruntun = 0; it.url = URL.createObjectURL(blob); audio = audio || new Audio(); audio.src = it.url;
+      audio.onplaying = () => { talking = true; try { lipStart(it.text, rate()); } catch (_) {}
+        if (/^\s*(halo|hai|hallo|selamat (pagi|siang|sore|malam|datang))\b|sampai jumpa|terima kasih kembali|dadah/i.test(it.text)) { try { joyUntil = performance.now() + 1200; } catch (_) {} } };
+      audio.onended = () => selesaiItem(it); audio.onerror = () => selesaiItem(it);
+      const p = audio.play(); if (p && p.catch) p.catch(e => { galat('Audio diblokir peramban (' + (e.name || e) + '). Ketuk layar sekali.'); cadangan(it); });
+      audio.onloadedmetadata = () => { const d = isFinite(audio.duration) ? audio.duration : 0; setTimeout(() => { if (main === it) selesaiItem(it); }, (d + 3) * 1000); };
+      setTimeout(() => { if (main === it && audio.paused) selesaiItem(it); }, 6000 + it.text.length * 150);
+    }).catch(e => { if (it.batal || (e && e.name === 'AbortError')) return; galat(e.message || String(e)); cadangan(it); });
+  }
+  function cadangan(it) { // gagal → suara perangkat untuk kalimat ini, lalu lanjut antrean
+    if (it.fin) return; galatBeruntun++;
+    sayDasar(it.text, () => { if (it.fin) return; it.fin = true; main = null; it.done(); putar(); });
+  }
+  function galat(m) { galatTerakhir = m.replace(/(key|kunci)[=:]\S+/ig, '$1=•••'); tampilStatus(); }
+
+  window.say = say = function (text, done) {
+    const p = cfg.prov;
+    if (p === 'perangkat' || !SINTESIS[p] || !kunci(p) || galatBeruntun >= 3) return sayDasar(text, done);
+    lastSpoken = (lastSpoken + ' ' + text).slice(-600);
+    const it = { text: String(text).slice(0, 2500), done: done || (() => {}) }; it.janji = ambil(p, it.text); it.janji.catch(() => {});
+    antre.push(it); putar();
+  };
+  const _stop = stopSpeaking;
+  window.stopSpeaking = stopSpeaking = function () {
+    antre.forEach(it => { it.batal = true; it.fin = true; }); antre = [];
+    if (main) { main.batal = true; main.fin = true; main = null; }
+    try { ctl && ctl.abort(); } catch (_) {} ctl = null;
+    if (audio) { try { audio.pause(); audio.onended = audio.onerror = null; } catch (_) {} }
+    _stop();
+  };
+  // setelah 3 galat beruntun ROBI memakai suara perangkat; dicoba lagi tiap 5 menit
+  setInterval(() => { if (galatBeruntun >= 3) { galatBeruntun = 0; tampilStatus(); } }, 5 * 60000);
+
+  // ---------- PANEL PENGATURAN ----------
+  const sec = document.createElement('div'); sec.className = 'sec'; sec.id = 'secSuaraPenyedia';
+  sec.innerHTML = `<b>PENYEDIA SUARA ROBI</b>
+    <div class="row"><select id="spProv" style="width:100%"></select></div>
+    <div class="row" id="spInfo" style="font-size:12px;display:block"></div>
+    <div id="spAwan">
+      <div class="row"><input type="password" id="spKunci" placeholder="Kunci API (disimpan di perangkat ini saja)" autocomplete="off" style="flex:1;min-width:200px;background:rgba(10,6,30,.7);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:5px 7px;font-size:13px"><button class="chip" id="spSimpanK">Simpan kunci</button><button class="chip" id="spHapusK">Hapus</button></div>
+      <div class="row" id="spRegRow"><label>Region Azure <input type="text" id="spRegion" style="width:150px" placeholder="southeastasia"></label></div>
+      <div class="row" id="spModRow"><label>Model <select id="spModel"></select></label></div>
+      <div class="row"><select id="spSuara" style="max-width:300px"></select><button class="chip" id="spMuat">Muat daftar</button></div>
+    </div>
+    <div class="row"><button class="chip" id="spCoba">▶ Coba suara ini</button><button class="chip" id="spBanding">Bandingkan semua</button></div>
+    <div class="row" id="spStatus" style="font-size:12px;display:block"></div>
+    <div class="row" id="spTabel" style="font-size:11.5px;display:none"></div>`;
+  const secSuara = $id('voiceSel').closest('.sec'); secSuara.parentNode.insertBefore(sec, secSuara.nextSibling);
+  const sel = $id('spProv');
+  sel.innerHTML = Object.entries(PROV).map(([k, v]) => `<option value="${k}">${esc(v.nama)} — ${esc(v.label)}</option>`).join('');
+  function isiSuara() {
+    const p = cfg.prov, d = PROV[p]; if (!d.suara) return;
+    const list = (cfg.daftar[p] && cfg.daftar[p].length) ? cfg.daftar[p] : d.suara;
+    $id('spSuara').innerHTML = list.map(([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join('');
+    if (!list.some(x => x[0] === cfg[p])) cfg[p] = list[0][0]; $id('spSuara').value = cfg[p];
+  }
+  function tampil() {
+    const p = cfg.prov, d = PROV[p]; sel.value = p;
+    $id('spInfo').innerHTML = `<span style="color:${d.warna};font-weight:700">● ${esc(d.label)}</span> — ${esc(d.info)}`;
+    $id('spAwan').style.display = p === 'perangkat' ? 'none' : '';
+    $id('spRegRow').style.display = p === 'azure' ? '' : 'none';
+    $id('spModRow').style.display = d.model ? '' : 'none';
+    $id('spMuat').style.display = DAFTAR[p] ? '' : 'none';
+    if (d.model) { $id('spModel').innerHTML = d.model.map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join(''); $id('spModel').value = cfg.elevenModel; }
+    $id('spRegion').value = cfg.azureRegion; $id('spKunci').value = ''; isiSuara(); tampilStatus();
+  }
+  function tampilStatus() {
+    const p = cfg.prov, el = $id('spStatus'); if (!el) return;
+    if (p === 'perangkat') { el.innerHTML = '<span style="color:#5dff9e">✓ Aktif: suara perangkat.</span> Atur jenis suara, kecepatan, dan nada di bagian SUARA.'; return; }
+    const k = kunci(p), n = terpakai(p), q = KUOTA[p] ? KUOTA[p](cfg[p]) : 0;
+    let h = k ? '<span style="color:#5dff9e">✓ Kunci tersimpan (•••' + esc(k.slice(-4)) + ').</span>' : '<span style="color:#ffd166">Belum ada kunci → ROBI tetap memakai suara perangkat.</span>';
+    if (galatBeruntun >= 3) h += ' <span style="color:#ff8a8a">Sementara beralih ke suara perangkat (3 galat beruntun).</span>';
+    h += `<br>Terpakai bulan ini (tercatat di kios ini): <b>${n.toLocaleString('id-ID')}</b> karakter` + (q ? ` dari kuota gratis ${q.toLocaleString('id-ID')} (${Math.min(100, n / q * 100).toFixed(1)}%)` : '') + '.';
+    if (q && n > q * 0.8) h += ' <span style="color:#ff8a8a">Mendekati/melewati kuota gratis.</span>';
+    h += `<br>Galat terakhir: ${esc(galatTerakhir)}`;
+    el.innerHTML = h;
+  }
+  sel.onchange = () => { cfg.prov = sel.value; galatBeruntun = 0; simpan(); tampil(); };
+  $id('spSuara').onchange = () => { cfg[cfg.prov] = $id('spSuara').value; simpan(); };
+  $id('spModel').onchange = () => { cfg.elevenModel = $id('spModel').value; simpan(); };
+  $id('spRegion').onchange = () => { cfg.azureRegion = $id('spRegion').value.trim().toLowerCase() || 'southeastasia'; simpan(); };
+  $id('spSimpanK').onclick = () => { const v = $id('spKunci').value.trim(); if (!v) return; lsW(LSK + cfg.prov, v); $id('spKunci').value = ''; galatBeruntun = 0; galatTerakhir = '-'; tampilStatus(); };
+  $id('spHapusK').onclick = () => { lsD(LSK + cfg.prov); tampilStatus(); };
+  $id('spMuat').onclick = async () => {
+    const p = cfg.prov; if (!kunci(p)) { galat('Simpan kunci dulu.'); return; }
+    $id('spMuat').textContent = 'Memuat…';
+    try { const l = await DAFTAR[p](); if (!l.length) throw new Error('Daftar kosong'); cfg.daftar[p] = l; simpan(); isiSuara(); galatTerakhir = '-'; $id('spStatus').insertAdjacentHTML('afterbegin', `<span style="color:#5dff9e">✓ ${l.length} suara dimuat.</span><br>`); }
+    catch (e) { galat(e.message); } finally { $id('spMuat').textContent = 'Muat daftar'; }
+  };
+  const CONTOH = 'Halo, saya ROBI, robot inovatif SMP Negeri 1 Pancarijang. Ada yang bisa saya bantu?';
+  $id('spCoba').onclick = () => { try { unlockAudio(); } catch (_) {} stopSpeaking(); galatBeruntun = 0; const my = ++turnId;
+    say(CONTOH, () => { tampilStatus(); if (my === turnId && running && phase !== 'thinking') backToListening(); }); };
+  // bandingkan: putar kalimat yang sama dari tiap penyedia yang sudah berkunci, berurutan
+  $id('spBanding').onclick = async () => {
+    try { unlockAudio(); } catch (_) {} stopSpeaking(); const asal = cfg.prov, my = ++turnId;
+    const daftar = ['perangkat'].concat(Object.keys(SINTESIS).filter(kunci));
+    const t = $id('spTabel'); t.style.display = 'block';
+    t.innerHTML = '<table style="border-collapse:collapse;width:100%"><tr style="color:#eae6ff"><td>Penyedia</td><td>Waktu siap</td><td>Hasil</td></tr>' + daftar.map(p => `<tr id="spT_${p}"><td>${esc(PROV[p].nama.split(' (')[0])}</td><td>…</td><td></td></tr>`).join('') + '</table>' + (daftar.length < 2 ? '<div style="margin-top:4px">Simpan kunci penyedia lain untuk membandingkan.</div>' : '');
+    for (const p of daftar) {
+      if (my !== turnId) break; cfg.prov = p; const row = $id('spT_' + p), t0 = performance.now();
+      if (p !== 'perangkat') { try { await ambil(p, CONTOH); row.cells[1].textContent = ((performance.now() - t0) / 1000).toFixed(1) + ' dtk'; } catch (e) { row.cells[1].textContent = '-'; row.cells[2].textContent = 'gagal: ' + (e.message || e).slice(0, 60); continue; } }
+      else row.cells[1].textContent = 'langsung';
+      await new Promise(res => say(CONTOH, res)); row.cells[2].textContent = '✓ diputar';
+    }
+    cfg.prov = asal; tampil();
+  };
+  tampil();
+  window.ROBI_SUARA = { cfg: () => Object.assign({}, cfg), PROV, terpakai };
+})();
+
+/* === ROBI v1.2.1 — PERBAIKAN: pulih otomatis setelah galat jaringan pengenal suara ===
+   Masalah di v1.2: galat "network" dari pengenal suara Chrome membuat ROBI berhenti di
+   "ketuk untuk bicara" selamanya. Perbaikan ini hanya bekerja bila galat terakhir adalah galat
+   jaringan (micReason === 'network'); perilaku lain v1.2 tidak berubah. */
+(function () {
+  if (!rec) return;
+  let srOn = false, srTerakhir = performance.now(), n = 0;
+  const os = rec.onstart, oe = rec.onend;
+  rec.onstart = function () { srOn = true; srTerakhir = performance.now(); return os && os.apply(this, arguments); };
+  rec.onend = function () { srOn = false; srTerakhir = performance.now(); return oe && oe.apply(this, arguments); };
+  function pulih(segera) {
+    if (micReason !== 'network' || engine !== 'web' || ADMIN || !navigator.onLine) return;
+    if (phase === 'speaking' || phase === 'thinking' || micHold || micResume) return;
+    // pengenal sudah hidup lagi, tetapi layar masih meminta ketukan → kembalikan ke mendengar
+    if (srOn && running) { micReason = ''; n = 0; if (phase === 'tap') { setPhase('listening'); setStatus(''); } return; }
+    // pengenal mati → nyalakan lagi dengan jeda bertingkat 2,5 · 5 · 10 · 20 · 30 detik
+    if (!segera && performance.now() - srTerakhir < Math.min(30000, 2500 * Math.pow(2, n))) return;
+    n++; srTerakhir = performance.now();
+    if (!running) { if (KIOSK) kiosStart(); return; }
+    setPhase('listening'); setStatus('');
+    try { rec.start(); micOn = true; } catch (_) {}
+  }
+  setInterval(() => pulih(false), 2500);
+  window.addEventListener('online', () => { n = 0; setTimeout(() => pulih(true), 1200); });
+})();
+
+/* === ROBI v1.2.2 — PERBAIKAN: ROBI bisa berbicara panjang dengan suara Google di Chrome ===
+   Masalah: suara Google "online" di Chrome berhenti sendiri bila satu ucapan lebih dari ±15 detik.
+   Berbeda dari v1.3 (dicabut), perbaikan ini:
+   - TIDAK memakai pause/resume (dicurigai mengubah suara);
+   - HANYA aktif untuk suara Google online di Chrome; suara Microsoft/Edge, suara Claude, dan
+     penyedia awan tidak disentuh sama sekali;
+   - HANYA memecah kalimat yang lebih dari 200 huruf, di titik jeda alami (titik koma, titik dua,
+     koma, lalu kata sambung). Kalimat biasa diucapkan persis seperti v1.2. */
+(function () {
+  const BATAS = 200, POTONG = 180;
+  function kenaBug() {
+    try {
+      const s = window.ROBI_SUARA && window.ROBI_SUARA.cfg(); if (s && s.prov !== 'perangkat') return false;
+      const c = curVoice(); return c.kind === 'b' && c.v && /google/i.test(c.v.name) && c.v.localService === false;
+    } catch (_) { return false; }
+  }
+  function pecah(t) {
+    const out = []; let s = String(t).trim();
+    while (s.length > BATAS) {
+      const pot = s.slice(0, POTONG); let i = -1;
+      for (const re of [/[;:]\s/g, /,\s/g, /\s(dan|serta|atau|tetapi|namun|yaitu|sehingga|karena|kemudian|lalu)\s/g, /\s/g]) {
+        let m, j = -1; while ((m = re.exec(pot))) j = m.index + 1; if (j > POTONG * 0.45) { i = j; break; }
+      }
+      if (i <= 0) i = POTONG;
+      out.push(s.slice(0, i).trim()); s = s.slice(i).trim();
+    }
+    if (s) out.push(s); return out;
+  }
+  const sayAsli = window.say;
+  window.say = say = function (text, done) {
+    if (String(text).length <= BATAS || !kenaBug()) return sayAsli(text, done);
+    const b = pecah(text);
+    b.forEach((x, i) => sayAsli(x, i === b.length - 1 ? done : () => {}));
+  };
+  window.ROBI_BICARA = { pecah, kenaBug };
+})();
+
+/* === ROBI v1.2.3 — PERBAIKAN: jeda hening dihitung sejak ROBI benar-benar diam ===
+   Akar masalah di v1.2: setiap kalimat dimasukkan ke antrean suara sekaligus, dan pengaman waktu
+   tiap kalimat mulai dihitung sejak kalimat MASUK antrean, bukan sejak mulai diucapkan. Pada
+   penjelasan panjang, pengaman kalimat yang masih mengantre habis lebih dulu, ROBI dianggap sudah
+   selesai bicara, hitungan hening dimulai, lalu "Baik, sampai jumpa lagi!" memotong penjelasan.
+   Logika baru (sesuai permintaan Pak BOS):
+   1. ROBI baru kembali ke mode mendengar setelah suaranya benar-benar berhenti.
+   2. Hitungan jeda hening hanya berjalan saat ROBI diam; selama ROBI berbicara atau berpikir,
+      hitungan ditahan dan dimulai dari nol begitu ROBI diam. */
+(function () {
+  function robiBicara() {
+    try { if (window.speechSynthesis && speechSynthesis.speaking) return true; } catch (_) {}
+    return !!talking || phase === 'speaking' || phase === 'thinking';
+  }
+  const suaraMasihJalan = () => { try { return (window.speechSynthesis && speechSynthesis.speaking) || !!talking; } catch (_) { return !!talking; } };
+
+  // 1. kembali mendengar hanya setelah suara berhenti (batas tunggu 3 menit sebagai pengaman)
+  const kembaliAsli = window.backToListening;
+  let tunggu = null;
+  window.backToListening = backToListening = function () {
+    clearTimeout(tunggu);
+    if (!suaraMasihJalan()) return kembaliAsli.apply(this, arguments);
+    const giliran = turnId, mulai = performance.now(), args = arguments, self = this;
+    (function cek() {
+      if (giliran !== turnId) return;                                   // ada giliran baru / disela: batal
+      if (suaraMasihJalan() && performance.now() - mulai < 180000) { tunggu = setTimeout(cek, 200); return; }
+      kembaliAsli.apply(self, args);
+    })();
+  };
+
+  // 2. hitungan jeda hening ditahan selama ROBI berbicara/berpikir
+  const armAsli = window.armSesi;
+  window.armSesi = armSesi = function () {
+    clearTimeout(sesiTimer);
+    if (!(KIOSK && sesi === 'aktif')) return;
+    if (robiBicara()) { sesiTimer = setTimeout(armSesi, 250); return; }   // belum diam: tunda, hitung dari nol nanti
+    return armAsli.apply(this, arguments);
+  };
+})();
+
+/* === ROBI v1.2.4 — Layar tetap menyala selama mode kios (Screen Wake Lock) ===
+   Masalah: pengaturan daya Windows bisa mematikan layar atau menidurkan komputer saat kios lama
+   tidak disentuh. Saat komputer tidur, ROBI berhenti mendengar dan tidak terlihat.
+   Perbaikan: selama mode kios aktif dan halaman ROBI tampil, peramban diminta menjaga layar tetap
+   menyala. Kunci dilepas otomatis oleh peramban bila jendela diminimalkan, lalu diminta lagi saat
+   ROBI tampil kembali. Halaman admin (?admin) dan mode non-kios tidak terpengaruh.
+   Bila peramban tidak mendukung atau menolak (mis. di dalam claude.ai), tidak terjadi apa-apa. */
+(function () {
+  if (!('wakeLock' in navigator)) return;
+  let kunci = null, minta = false;
+  async function jaga() {
+    if (!KIOSK || ADMIN || document.hidden || kunci || minta) return;
+    minta = true;
+    try { kunci = await navigator.wakeLock.request('screen'); kunci.addEventListener('release', () => { kunci = null; }); }
+    catch (_) {} finally { minta = false; }
+  }
+  function lepas() { if (kunci && (!KIOSK || ADMIN)) { try { kunci.release(); } catch (_) {} kunci = null; } }
+  document.addEventListener('visibilitychange', jaga);
+  document.addEventListener('pointerdown', jaga, true);
+  setInterval(() => { lepas(); jaga(); }, 60000);
+  jaga();
+  window.ROBI_LAYAR = { aktif: () => !!kunci };
+})();
+</script>
 </body>
 </html>
