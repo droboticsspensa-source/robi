@@ -3052,7 +3052,7 @@ var __BUKU_BAWAAN={"Kelas":[{"kode":"VII-1","nama":"VII Analyst"},{"kode":"VII-2
 // Data: localStorage (edit lokal) -> jika kosong, pakai data tertanam __TB_BAWAAN.
 // Bisa diekspor/impor sebagai 1 file .json, dan dibakar ke index.html (permanen).
 // ============================================================================
-var __TB_BAWAAN={"piket":{},"pegawai":[]};//TB_END
+var __TB_BAWAAN={"piket":{},"pegawai":[{"nama":"Hj. Dahirah, S.Sos","jabatan":"Staf Kantor"},{"nama":"Hj. Sitti Rahma, S.Sos","jabatan":"Staf Kantor"},{"nama":"Surya, A.Md.Pust","jabatan":"Staf Kantor"},{"nama":"Aldi Saputra, ST","jabatan":"Staf Kantor"},{"nama":"Muhammad Idrus","jabatan":"Staf Kantor"},{"nama":"Sriwahyuni Kadir, S.Pd","jabatan":"Staf Kantor"}]};//TB_END
 (function(){ try {
   var HARI=['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
   function low(s){ return (s==null?'':String(s)).toLowerCase().trim(); }
@@ -3093,15 +3093,20 @@ var __TB_BAWAAN={"piket":{},"pegawai":[]};//TB_END
       if(hari==='Minggu') return {text:'Hari Minggu sekolah libur, tidak ada guru piket.',intent:'TAMBAHAN'};
       var list=pk[hari]; if(!list||!list.length) return {text:'Maaf, data guru piket hari '+hari+' belum ada pada ROBI.',intent:'TAMBAHAN'};
       return {text:'Guru piket hari '+hari+' adalah '+gabung(list)+'.',intent:'TAMBAHAN'}; }
-    var niatPeg=/\b(jabatan|pegawai|staf|staff|tata usaha|operator|kepala sekolah|wakil kepala|wakasek|kepala tata usaha|kaur|petugas perpustakaan|pustakawan|penjaga sekolah|satpam|bendahara sekolah)\b/.test(t);
+    var pdk=function(n){ return String(n).split(',')[0].trim(); };
     var peg=getPegawai();
+    if(/\b(pegawai|staf|staff|karyawan)\b/.test(t)){
+      if(!peg.length) return {text:'Maaf, data pegawai belum diisi pada ROBI. Silakan tanyakan ke Tata Usaha.',intent:'TAMBAHAN'};
+      var byj={}; peg.forEach(function(p){ (byj[p.jabatan]=byj[p.jabatan]||[]).push(pdk(p.nama)); });
+      var parts=Object.keys(byj).map(function(j){ return j+': '+gabung(byj[j]); });
+      return {text: parts.join('. ')+'.', intent:'TAMBAHAN'};
+    }
     if(peg.length){
       var byJab=peg.filter(function(p){ return t.indexOf(low(p.jabatan))>=0; });
-      if(byJab.length) return {text:byJab.map(function(p){return p.jabatan+' adalah '+p.nama;}).join('. ')+'.',intent:'TAMBAHAN'};
-      if(niatPeg || /jabatan/.test(t)){ var byNama=peg.filter(function(p){ return namaTokens(p.nama).some(function(tk){ return t.indexOf(tk)>=0; }); });
-        if(byNama.length) return {text:byNama.map(function(p){return p.nama+' menjabat sebagai '+p.jabatan;}).join('. ')+'.',intent:'TAMBAHAN'}; }
-      if(niatPeg) return {text:'Maaf, data itu belum ada pada ROBI. Silakan tanyakan ke Tata Usaha.',intent:'TAMBAHAN'};
-    } else if(niatPeg){ return {text:'Maaf, data pegawai belum diisi pada ROBI. Silakan tanyakan ke Tata Usaha.',intent:'TAMBAHAN'}; }
+      if(byJab.length) return {text:byJab.map(function(p){return p.jabatan+' adalah '+pdk(p.nama);}).join('. ')+'.',intent:'TAMBAHAN'};
+      if(/jabatan/.test(t)){ var byNama=peg.filter(function(p){ return namaTokens(p.nama).some(function(tk){ return t.indexOf(tk)>=0; }); });
+        if(byNama.length) return {text:byNama.map(function(p){return pdk(p.nama)+' menjabat sebagai '+p.jabatan;}).join('. ')+'.',intent:'TAMBAHAN'}; }
+    }
     return null; }
 
   window.robiJawabTambahan=jawabTambahan;
