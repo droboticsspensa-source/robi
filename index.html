@@ -2583,7 +2583,7 @@ var __BUKU_BAWAAN={"Kelas":[{"kode":"VII-1","nama":"VII Analyst"},{"kode":"VII-2
     if (!rows.length) return { text: 'Hari ' + hari + ' tidak ada ' + act.toLowerCase() + '.', intent: 'KEGIATAN' };
     return { text: act + ' hari ' + hari + ' pukul ' + rows[0].mulai + ' sampai ' + rows[rows.length - 1].selesai + '.', intent: 'KEGIATAN' };
   }
-  function jawabData(q, now = new Date()) { try { const kg = jawabKegiatan(q, now); if (kg) return kg; return PK.jawabTerpadu(String(q || ''), now, { book: BUKU, P, T }); } catch (e) { return { text: null, intent: 'GALAT' }; } }
+  function jawabData(q, now = new Date()) { try { const kg = jawabKegiatan(q, now); if (kg) return kg; const r = PK.jawabTerpadu(String(q || ''), now, { book: BUKU, P, T }); if (r && r.text && /\bwali\s*kelas\b|\bketua\s*kelas\b|\bsekretaris\s*kelas\b|\bbendahara\s*kelas\b|\bpengurus\s*kelas\b|jumlah\s*(siswa|murid|peserta)|berapa\s*(siswa|murid|orang|peserta)/i.test(String(q || ''))) return { text: null, intent: 'LLM' }; return r; } catch (e) { return { text: null, intent: 'GALAT' }; } }
   function infoHariIni() {
     const now = new Date(), s = new C.Sesi(); s.dengar('robi', 0); const D = PK.dataPada(BUKU, P, C.tglLokal(now));
     let jam = ''; try { jam = TK.proses('sekarang jam ke berapa', s, now, D, T).text || ''; } catch (e) {}
