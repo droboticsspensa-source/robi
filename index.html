@@ -3052,17 +3052,19 @@ var __BUKU_BAWAAN={"Kelas":[{"kode":"VII-1","nama":"VII Analyst"},{"kode":"VII-2
 // Data: localStorage (edit lokal) -> jika kosong, pakai data tertanam __TB_BAWAAN.
 // Bisa diekspor/impor sebagai 1 file .json, dan dibakar ke index.html (permanen).
 // ============================================================================
-var __TB_BAWAAN={"piket":{},"pegawai":[{"nama":"Hj. Dahirah, S.Sos","jabatan":"Bendahara Barang"},{"nama":"Hj. Sitti Rahma, S.Sos","jabatan":"Administrasi Kantor"},{"nama":"Surya, A.Md.Pust","jabatan":"Petugas Perpustakaan"},{"nama":"Aldi Saputra, ST","jabatan":"Operator Dapodik"},{"nama":"Muhammad Idrus","jabatan":"Bujang Sekolah"},{"nama":"Sriwahyuni Kadir, S.Pd","jabatan":"Administrasi Kantor"}],"tugas":[{"nama":"Bapak Rahmat Perdana, S.Kom","jabatan":"Kepala Sekolah"},{"nama":"Bapak H. Abdul Malik Ranru, S.Pd, M.Pd","jabatan":"Wakil Kepala Sekolah Bidang Kurikulum"},{"nama":"Ibu Nirwana, S.Pd, M.Pd","jabatan":"Wakil Kepala Sekolah Bidang Kesiswaan"},{"nama":"Bapak Mawardi, S.Pd","jabatan":"Pembina OSIS"},{"nama":"Bapak Abd. Jalil Thamrin, S.Pd","jabatan":"Pembina Pers"},{"nama":"Ibu Hj. Nurhayati, S.Pd","jabatan":"Kepala Perpustakaan"},{"nama":"Bapak Sahrun Nur, S.Pd","jabatan":"Pembina Robotika"},{"nama":"Ibu Nurul Huda, S.Pd","jabatan":"Pembina Pramuka"},{"nama":"Bapak Renaldi Darmadi, S.Pd","jabatan":"Pembina Pramuka"},{"nama":"Bapak Munawir Mahmuddin, S.Pd","jabatan":"Pembina PMR"},{"nama":"Ibu Rahma, S.Pd","jabatan":"Pembina PMR"},{"nama":"Bapak H. Febri Handika, S.Pd","jabatan":"Pembina PIK Remaja"},{"nama":"Bapak Surya Darma Wijaya, S.Pd","jabatan":"Pembina SKS"},{"nama":"Ibu Heriyanti Ali Pariwusi, S.Pd","jabatan":"Pembina Drum Band dan Ekskul Kesenian"},{"nama":"Ibu Supiati Taiyeb, S.Kom, M.M.Pd","jabatan":"Guru Bimbingan Konseling"},{"nama":"Bapak H. Febri Handika, S.Pd","jabatan":"Guru Bimbingan Konseling"},{"nama":"Bapak Surya Darma Wijaya, S.Pd","jabatan":"Guru Bimbingan Konseling"}]};//TB_END
+var __TB_BAWAAN={"piket":{},"pegawai":[{"nama":"Hj. Dahirah, S.Sos","jabatan":"Bendahara Barang"},{"nama":"Hj. Sitti Rahma, S.Sos","jabatan":"Administrasi Kantor"},{"nama":"Surya, A.Md.Pust","jabatan":"Petugas Perpustakaan"},{"nama":"Aldi Saputra, ST","jabatan":"Operator Dapodik"},{"nama":"Muhammad Idrus","jabatan":"Bujang Sekolah"},{"nama":"Sriwahyuni Kadir, S.Pd","jabatan":"Administrasi Kantor"}],"tugas":[{"nama":"Bapak Rahmat Perdana, S.Kom","jabatan":"Kepala Sekolah"},{"nama":"Bapak H. Abdul Malik Ranru, S.Pd, M.Pd","jabatan":"Wakil Kepala Sekolah Bidang Kurikulum"},{"nama":"Ibu Nirwana, S.Pd, M.Pd","jabatan":"Wakil Kepala Sekolah Bidang Kesiswaan"},{"nama":"Bapak Mawardi, S.Pd","jabatan":"Pembina OSIS"},{"nama":"Bapak Abd. Jalil Thamrin, S.Pd","jabatan":"Pembina Pers"},{"nama":"Ibu Hj. Nurhayati, S.Pd","jabatan":"Kepala Perpustakaan"},{"nama":"Bapak Sahrun Nur, S.Pd","jabatan":"Pembina Robotika"},{"nama":"Ibu Nurul Huda, S.Pd","jabatan":"Pembina Pramuka"},{"nama":"Bapak Renaldi Darmadi, S.Pd","jabatan":"Pembina Pramuka"},{"nama":"Bapak Munawir Mahmuddin, S.Pd","jabatan":"Pembina PMR"},{"nama":"Ibu Rahma, S.Pd","jabatan":"Pembina PMR"},{"nama":"Bapak H. Febri Handika, S.Pd","jabatan":"Pembina PIK Remaja"},{"nama":"Bapak Surya Darma Wijaya, S.Pd","jabatan":"Pembina SKS"},{"nama":"Ibu Heriyanti Ali Pariwusi, S.Pd","jabatan":"Pembina Drum Band dan Ekskul Kesenian"},{"nama":"Ibu Supiati Taiyeb, S.Kom, M.M.Pd","jabatan":"Guru Bimbingan Konseling"},{"nama":"Bapak H. Febri Handika, S.Pd","jabatan":"Guru Bimbingan Konseling"},{"nama":"Bapak Surya Darma Wijaya, S.Pd","jabatan":"Guru Bimbingan Konseling"}],"wali":{"VII Analyst":"Bapak Sahrun Nur, S.Pd","VII Coding":"Ibu Yanti Supri, S.Sos","VII Designer":"Bapak H. Syahruddin, S.Pd","VII Engineer":"Ibu Rahma, S.Pd","VII Programmer":"Ibu Chandra Amiruddin, S.Pd","VII Developer":"Ibu Rahmaniar BM, S.Pd","VII Webmaster":"Ibu Nurul Huda, S.Pd"},"jumlah":{"VII Analyst":{"jml":31,"L":6,"P":25},"VII Coding":{"jml":31,"L":12,"P":19},"VII Designer":{"jml":31,"L":12,"P":19},"VII Engineer":{"jml":29,"L":20,"P":9},"VII Programmer":{"jml":29,"L":13,"P":15},"VII Developer":{"jml":29,"L":8,"P":21},"VII Webmaster":{"jml":29,"L":19,"P":10}}};//TB_END
 (function(){ try {
   var HARI=['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
   function low(s){ return (s==null?'':String(s)).toLowerCase().trim(); }
   function lsGetJ(k){ try{ return JSON.parse(localStorage.getItem(k)||'null'); }catch(_){ return null; } }
   function lsSet(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); return true; }catch(_){ return false; } }
   function lsDel(k){ try{ localStorage.removeItem(k); }catch(_){} }
-  var TB=(typeof __TB_BAWAAN==='object'&&__TB_BAWAAN)?__TB_BAWAAN:{piket:{},pegawai:[],tugas:[]};
+  var TB=(typeof __TB_BAWAAN==='object'&&__TB_BAWAAN)?__TB_BAWAAN:{piket:{},pegawai:[],tugas:[],wali:{},jumlah:{}};
   function getPiket(){ var l=lsGetJ('robi.piket'); if(l&&typeof l==='object') return l; return TB.piket||{}; }
   function getPegawai(){ var l=lsGetJ('robi.pegawai'); if(Array.isArray(l)) return l; return Array.isArray(TB.pegawai)?TB.pegawai:[]; }
   function getTugas(){ var l=lsGetJ('robi.tugas'); if(Array.isArray(l)) return l; return Array.isArray(TB.tugas)?TB.tugas:[]; }
+  function getWali(){ var l=lsGetJ('robi.wali'); if(l&&typeof l==='object') return l; return TB.wali||{}; }
+  function getJumlah(){ var l=lsGetJ('robi.jumlah'); if(l&&typeof l==='object') return l; return TB.jumlah||{}; }
 
   function parsePiket(teks){ var out={},err=[];
     (teks||'').split(/\n+/).forEach(function(ln){ ln=ln.trim(); if(!ln) return;
@@ -3110,6 +3112,14 @@ var __TB_BAWAAN={"piket":{},"pegawai":[{"nama":"Hj. Dahirah, S.Sos","jabatan":"B
       if(hari==='Minggu') return {text:'Hari Minggu sekolah libur, tidak ada guru piket.',intent:'TAMBAHAN'};
       var list=pk[hari]; if(!list||!list.length) return {text:'Maaf, data guru piket hari '+hari+' belum ada pada ROBI.',intent:'TAMBAHAN'};
       return {text:'Guru piket hari '+hari+' adalah '+gabung(list)+'.',intent:'TAMBAHAN'}; }
+    // --- WALI KELAS ---
+    if(/wali\s*kelas/.test(t)){ var w=getWali();
+      for(var wk in w){ var rb=wk.replace(/^(vii|viii|ix)\s+/i,'').toLowerCase(); if(rb && t.indexOf(rb)>=0) return {text:'Wali kelas '+wk+' adalah '+w[wk]+'.',intent:'TAMBAHAN'}; }
+      return null; }
+    // --- JUMLAH SISWA ---
+    if(/(jumlah|berapa|banyak)/.test(t) && /(siswa|murid|peserta didik)/.test(t)){ var jm=getJumlah();
+      for(var jk in jm){ var rb2=jk.replace(/^(vii|viii|ix)\s+/i,'').toLowerCase(); if(rb2 && t.indexOf(rb2)>=0){ var cc=jm[jk]; return {text:'Kelas '+jk+' berjumlah '+cc.jml+' siswa, terdiri dari '+cc.L+' laki-laki dan '+cc.P+' perempuan.',intent:'TAMBAHAN'}; } }
+      return null; }
     var peg=getPegawai(), tug=getTugas(), all=peg.concat(tug);
     // --- DAFTAR PEGAWAI / STAF ---
     if(/\b(pegawai|staf|staff|karyawan)\b/.test(t)){
@@ -3164,24 +3174,24 @@ var __TB_BAWAAN={"piket":{},"pegawai":[{"nama":"Hj. Dahirah, S.Sos","jabatan":"B
       +'<div class="row" id="tbMsg" style="font-size:12px;display:block"></div>'
       +'<div class="row" id="tbUjiOut" style="font-size:12px;display:block;color:#eae6ff"></div>';
     anchor.parentNode.insertBefore(sec,anchor);
-    var cur=function(){ return { piket:parsePiket(document.getElementById('tbPiket').value).data, pegawai:parseList(document.getElementById('tbPeg').value).data, tugas:parseList(document.getElementById('tbTugas').value).data }; };
+    var cur=function(){ return { piket:parsePiket(document.getElementById('tbPiket').value).data, pegawai:parseList(document.getElementById('tbPeg').value).data, tugas:parseList(document.getElementById('tbTugas').value).data, wali:getWali(), jumlah:getJumlah() }; };
     document.getElementById('tbSave').onclick=function(){ var d=cur(); lsSet('robi.piket',d.piket); lsSet('robi.pegawai',d.pegawai); lsSet('robi.tugas',d.tugas);
       document.getElementById('tbMsg').textContent='✓ Tersimpan di komputer ini: '+Object.keys(d.piket).length+' hari piket, '+d.pegawai.length+' pegawai, '+d.tugas.length+' tugas tambahan.'; };
-    document.getElementById('tbExport').onclick=function(){ var d=cur(); var blob=new Blob([JSON.stringify({jenis:'robi.tambahan',piket:d.piket,pegawai:d.pegawai,tugas:d.tugas,diekspor:new Date().toISOString()},null,2)],{type:'application/json'});
+    document.getElementById('tbExport').onclick=function(){ var d=cur(); var blob=new Blob([JSON.stringify({jenis:'robi.tambahan',piket:d.piket,pegawai:d.pegawai,tugas:d.tugas,wali:d.wali,jumlah:d.jumlah,diekspor:new Date().toISOString()},null,2)],{type:'application/json'});
       var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='robi_data_tambahan.json'; document.body.appendChild(a); a.click(); a.remove(); document.getElementById('tbMsg').textContent='✓ Diekspor.'; };
     document.getElementById('tbImport').onchange=async function(ev){ var f=ev.target.files[0]; ev.target.value=''; if(!f) return;
       try{ var j=JSON.parse(await f.text()); if(j.jenis!=='robi.tambahan') throw new Error('Bukan berkas data tambahan ROBI');
         document.getElementById('tbPiket').value=Object.keys(j.piket||{}).sort(function(a,b){return HARI.indexOf(a)-HARI.indexOf(b);}).map(function(h){return h+': '+(j.piket[h]||[]).join(', ');}).join('\n');
         document.getElementById('tbPeg').value=(j.pegawai||[]).map(function(p){return p.nama+' | '+p.jabatan;}).join('\n');
         document.getElementById('tbTugas').value=(j.tugas||[]).map(function(p){return p.nama+' | '+p.jabatan;}).join('\n');
-        lsSet('robi.piket',j.piket||{}); lsSet('robi.pegawai',j.pegawai||[]); lsSet('robi.tugas',j.tugas||[]);
+        lsSet('robi.piket',j.piket||{}); lsSet('robi.pegawai',j.pegawai||[]); lsSet('robi.tugas',j.tugas||[]); if(j.wali) lsSet('robi.wali',j.wali); if(j.jumlah) lsSet('robi.jumlah',j.jumlah);
         document.getElementById('tbMsg').textContent='✓ Data diimpor dan disimpan.'; }
       catch(e){ document.getElementById('tbMsg').textContent='Gagal impor: '+(e.message||e); } };
-    document.getElementById('tbReset').onclick=function(){ lsDel('robi.piket'); lsDel('robi.pegawai'); lsDel('robi.tugas'); document.getElementById('tbMsg').textContent='Edit lokal dihapus. ROBI memakai data tertanam di file.'; };
+    document.getElementById('tbReset').onclick=function(){ lsDel('robi.piket'); lsDel('robi.pegawai'); lsDel('robi.tugas'); lsDel('robi.wali'); lsDel('robi.jumlah'); document.getElementById('tbMsg').textContent='Edit lokal dihapus. ROBI memakai data tertanam di file.'; };
     document.getElementById('tbBuild').onclick=async function(){ try{
       var d=cur(); var src=await fetch(location.pathname,{cache:'no-store'}).then(function(r){return r.text();});
       if(!/^var __TB_BAWAAN=.*?;\/\/TB_END/m.test(src)) throw new Error('penanda data tidak ditemukan');
-      var js=JSON.stringify({piket:d.piket,pegawai:d.pegawai,tugas:d.tugas}).replace(/</g,'\\u003c');
+      var js=JSON.stringify({piket:d.piket,pegawai:d.pegawai,tugas:d.tugas,wali:d.wali,jumlah:d.jumlah}).replace(/</g,'\\u003c');
       src=src.replace(/^var __TB_BAWAAN=.*?;\/\/TB_END/m, 'var __TB_BAWAAN='+js+';//TB_END');
       var a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([src],{type:'text/html'})); a.download='index.html'; document.body.appendChild(a); a.click(); a.remove();
       document.getElementById('tbMsg').innerHTML='✓ <b>index.html</b> terunduh dengan data tertanam. Unggah ke GitHub.'; }
