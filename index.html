@@ -3052,7 +3052,7 @@ var __BUKU_BAWAAN={"Kelas":[{"kode":"VII-1","nama":"VII Analyst"},{"kode":"VII-2
 // Data: localStorage (edit lokal) -> jika kosong, pakai data tertanam __TB_BAWAAN.
 // Bisa diekspor/impor sebagai 1 file .json, dan dibakar ke index.html (permanen).
 // ============================================================================
-var __TB_BAWAAN={"piket":{},"pegawai":[{"nama":"Hj. Dahirah, S.Sos","jabatan":"Bendahara Barang"},{"nama":"Hj. Sitti Rahma, S.Sos","jabatan":"Administrasi Kantor"},{"nama":"Surya, A.Md.Pust","jabatan":"Petugas Perpustakaan"},{"nama":"Aldi Saputra, ST","jabatan":"Operator Dapodik"},{"nama":"Muhammad Idrus","jabatan":"Bujang Sekolah"},{"nama":"Sriwahyuni Kadir, S.Pd","jabatan":"Administrasi Kantor"}],"tugas":[{"nama":"Bapak Rahmat Perdana, S.Kom","jabatan":"Kepala Sekolah"},{"nama":"Bapak H. Abdul Malik Ranru, S.Pd, M.Pd","jabatan":"Wakil Kepala Sekolah Bidang Kurikulum"},{"nama":"Ibu Nirwana, S.Pd, M.Pd","jabatan":"Wakil Kepala Sekolah Bidang Kesiswaan"},{"nama":"Bapak Mawardi, S.Pd","jabatan":"Pembina OSIS"},{"nama":"Bapak Abd. Jalil Thamrin, S.Pd","jabatan":"Pembina Pers"},{"nama":"Ibu Hj. Nurhayati, S.Pd","jabatan":"Kepala Perpustakaan"},{"nama":"Bapak Sahrun Nur, S.Pd","jabatan":"Pembina Robotika"},{"nama":"Ibu Nurul Huda, S.Pd","jabatan":"Pembina Pramuka"},{"nama":"Bapak Renaldi Darmadi, S.Pd","jabatan":"Pembina Pramuka"},{"nama":"Bapak Munawir Mahmuddin, S.Pd","jabatan":"Pembina PMR"},{"nama":"Ibu Rahma, S.Pd","jabatan":"Pembina PMR"},{"nama":"Bapak H. Febri Handika, S.Pd","jabatan":"Pembina PIK Remaja"},{"nama":"Bapak Surya Darma Wijaya, S.Pd","jabatan":"Pembina SKS"},{"nama":"Ibu Heriyanti Ali Pariwusi, S.Pd","jabatan":"Pembina Drum Band dan Ekskul Kesenian"}]};//TB_END
+var __TB_BAWAAN={"piket":{},"pegawai":[{"nama":"Hj. Dahirah, S.Sos","jabatan":"Bendahara Barang"},{"nama":"Hj. Sitti Rahma, S.Sos","jabatan":"Administrasi Kantor"},{"nama":"Surya, A.Md.Pust","jabatan":"Petugas Perpustakaan"},{"nama":"Aldi Saputra, ST","jabatan":"Operator Dapodik"},{"nama":"Muhammad Idrus","jabatan":"Bujang Sekolah"},{"nama":"Sriwahyuni Kadir, S.Pd","jabatan":"Administrasi Kantor"}],"tugas":[{"nama":"Bapak Rahmat Perdana, S.Kom","jabatan":"Kepala Sekolah"},{"nama":"Bapak H. Abdul Malik Ranru, S.Pd, M.Pd","jabatan":"Wakil Kepala Sekolah Bidang Kurikulum"},{"nama":"Ibu Nirwana, S.Pd, M.Pd","jabatan":"Wakil Kepala Sekolah Bidang Kesiswaan"},{"nama":"Bapak Mawardi, S.Pd","jabatan":"Pembina OSIS"},{"nama":"Bapak Abd. Jalil Thamrin, S.Pd","jabatan":"Pembina Pers"},{"nama":"Ibu Hj. Nurhayati, S.Pd","jabatan":"Kepala Perpustakaan"},{"nama":"Bapak Sahrun Nur, S.Pd","jabatan":"Pembina Robotika"},{"nama":"Ibu Nurul Huda, S.Pd","jabatan":"Pembina Pramuka"},{"nama":"Bapak Renaldi Darmadi, S.Pd","jabatan":"Pembina Pramuka"},{"nama":"Bapak Munawir Mahmuddin, S.Pd","jabatan":"Pembina PMR"},{"nama":"Ibu Rahma, S.Pd","jabatan":"Pembina PMR"},{"nama":"Bapak H. Febri Handika, S.Pd","jabatan":"Pembina PIK Remaja"},{"nama":"Bapak Surya Darma Wijaya, S.Pd","jabatan":"Pembina SKS"},{"nama":"Ibu Heriyanti Ali Pariwusi, S.Pd","jabatan":"Pembina Drum Band dan Ekskul Kesenian"},{"nama":"Ibu Supiati Taiyeb, S.Kom, M.M.Pd","jabatan":"Guru Bimbingan Konseling"},{"nama":"Bapak H. Febri Handika, S.Pd","jabatan":"Guru Bimbingan Konseling"},{"nama":"Bapak Surya Darma Wijaya, S.Pd","jabatan":"Guru Bimbingan Konseling"}]};//TB_END
 (function(){ try {
   var HARI=['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
   function low(s){ return (s==null?'':String(s)).toLowerCase().trim(); }
@@ -3102,7 +3102,7 @@ var __TB_BAWAAN={"piket":{},"pegawai":[{"nama":"Hj. Dahirah, S.Sos","jabatan":"B
   function grupJabatan(list){ var byj={}; list.forEach(function(p){ (byj[p.jabatan]=byj[p.jabatan]||[]).push(pdk(p.nama)); });
     return Object.keys(byj).map(function(j){ return j+' adalah '+gabung(byj[j]); }).join('. ')+'.'; }
 
-  function jawabTambahan(q,now){ now=now||new Date(); var t=low(q).replace(/wakasek|waka\b/g,"wakil kepala").replace(/\bkepsek\b/g,"kepala sekolah");
+  function jawabTambahan(q,now){ now=now||new Date(); var t=low(q).replace(/wakasek|waka\b/g,"wakil kepala").replace(/\bkepsek\b/g,"kepala sekolah").replace(/\bbk\b/g,"bimbingan konseling");
     // --- PIKET ---
     if(/\bpiket\b/.test(t)){ var pk=getPiket();
       if(!Object.keys(pk).length) return {text:'Maaf, data guru piket belum diisi pada ROBI. Silakan tanyakan ke Tata Usaha.',intent:'TAMBAHAN'};
@@ -3117,22 +3117,21 @@ var __TB_BAWAAN={"piket":{},"pegawai":[{"nama":"Hj. Dahirah, S.Sos","jabatan":"B
       var byj={}; peg.forEach(function(p){ (byj[p.jabatan]=byj[p.jabatan]||[]).push(pdk(p.nama)); });
       return {text: Object.keys(byj).map(function(j){ return j+': '+gabung(byj[j]); }).join('. ')+'.', intent:'TAMBAHAN'};
     }
-    var roleIntent=/(jabatan|tugas|pembina|kepala sekolah|wakil kepala|kepala perpustakaan|petugas perpustakaan|pustakawan|bendahara|operator|dapodik|administrasi|pramuka|osis|pmr|pers|robotika|drum ?band|kesenian|pik remaja|konseling|sks|satgas|ketertiban|bujang)/.test(t);
+    var roleIntent=/(jabatan|tugas|pembina|kepala sekolah|wakil kepala|kepala perpustakaan|petugas perpustakaan|pustakawan|bendahara|operator|dapodik|administrasi|pramuka|osis|pmr|pers|robotika|drum ?band|kesenian|pik remaja|konseling|bimbingan|sks|satgas|ketertiban|bujang)/.test(t);
     if(all.length){
       // jabatan -> orang
       var hit=cariJabatan(all,t);
       if(hit.length) return {text:grupJabatan(hit),intent:'TAMBAHAN'};
-      // nama -> jabatan (didahulukan sebelum daftar)
-      if(roleIntent){
-        var byNama=all.filter(function(p){ return namaTokens(p.nama).some(function(tk){ return t.indexOf(tk)>=0; }); });
-        if(byNama.length){ var byn={}; byNama.forEach(function(p){ (byn[pdk(p.nama)]=byn[pdk(p.nama)]||[]).push(p.jabatan); });
-          return {text:Object.keys(byn).map(function(n){ return n+' menjabat sebagai '+gabung(byn[n]); }).join('. ')+'.',intent:'TAMBAHAN'}; }
-      }
+      // nama -> jabatan (didahulukan sebelum daftar); nama polos butuh >=2 kata cocok
+      var minTok=roleIntent?1:2;
+      var byNama=all.filter(function(p){ return namaTokens(p.nama).filter(function(tk){ return t.indexOf(tk)>=0; }).length>=minTok; });
+      if(byNama.length){ var byn={}; byNama.forEach(function(p){ (byn[pdk(p.nama)]=byn[pdk(p.nama)]||[]).push(p.jabatan); });
+        return {text:Object.keys(byn).map(function(n){ return n+' menjabat sebagai '+gabung(byn[n]); }).join('. ')+'.',intent:'TAMBAHAN'}; }
     }
     // --- DAFTAR TUGAS TAMBAHAN (hanya bila tak ada yang spesifik) ---
     if(/(tugas tambahan|jabatan tambahan)/.test(t)){
       if(!tug.length) return {text:'Maaf, data tugas tambahan belum diisi pada ROBI.',intent:'TAMBAHAN'};
-      return {text:'Tugas tambahan guru dan pegawai: '+tug.map(function(p){return pdk(p.nama)+' sebagai '+p.jabatan;}).join('; ')+'.',intent:'TAMBAHAN'};
+      return {text:'Jabatan dan tugas tambahan: '+tug.map(function(p){return pdk(p.nama)+' sebagai '+p.jabatan;}).join('; ')+'.',intent:'TAMBAHAN'};
     }
     return null; }
 
