@@ -3048,128 +3048,117 @@ var __BUKU_BAWAAN={"Kelas":[{"kode":"VII-1","nama":"VII Analyst"},{"kode":"VII-2
 })();
 // ============================================================================
 // MODUL DATA TAMBAHAN — Guru Piket & Pegawai/Jabatan (input via admin, deterministik)
-// Additif, dibungkus try/catch, tidak menyentuh mesin inti. Data di localStorage,
-// bisa diubah admin kapan saja tanpa bongkar kode.
+// Additif, dibungkus try/catch, tidak menyentuh mesin inti.
+// Data: localStorage (edit lokal) -> jika kosong, pakai data tertanam __TB_BAWAAN.
+// Bisa diekspor/impor sebagai 1 file .json, dan dibakar ke index.html (permanen).
 // ============================================================================
+var __TB_BAWAAN={"piket":{},"pegawai":[]};//TB_END
 (function(){ try {
   var HARI=['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
   function low(s){ return (s==null?'':String(s)).toLowerCase().trim(); }
   function lsGetJ(k){ try{ return JSON.parse(localStorage.getItem(k)||'null'); }catch(_){ return null; } }
   function lsSet(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); return true; }catch(_){ return false; } }
+  function lsDel(k){ try{ localStorage.removeItem(k); }catch(_){} }
+  var TB = (typeof __TB_BAWAAN==='object'&&__TB_BAWAAN)?__TB_BAWAAN:{piket:{},pegawai:[]};
 
-  // ---------- penyimpanan ----------
-  function getPiket(){ return lsGetJ('robi.piket') || {}; }
-  function getPegawai(){ var a=lsGetJ('robi.pegawai'); return Array.isArray(a)?a:[]; }
+  function getPiket(){ var l=lsGetJ('robi.piket'); if(l&&typeof l==='object') return l; return TB.piket||{}; }
+  function getPegawai(){ var l=lsGetJ('robi.pegawai'); if(Array.isArray(l)) return l; return Array.isArray(TB.pegawai)?TB.pegawai:[]; }
 
-  // ---------- parser input admin ----------
-  function parsePiket(teks){
-    var out={}, err=[];
-    (teks||'').split(/\n+/).forEach(function(ln){
-      ln=ln.trim(); if(!ln) return;
+  function parsePiket(teks){ var out={},err=[];
+    (teks||'').split(/\n+/).forEach(function(ln){ ln=ln.trim(); if(!ln) return;
       var m=ln.match(/^(senin|selasa|rabu|kamis|jumat|jum'at|sabtu)\s*[:\-]\s*(.+)$/i);
       if(!m){ err.push(ln.slice(0,30)); return; }
       var hari={senin:'Senin',selasa:'Selasa',rabu:'Rabu',kamis:'Kamis',jumat:'Jumat',"jum'at":'Jumat',sabtu:'Sabtu'}[low(m[1])];
       var nama=m[2].split(/[,;]+/).map(function(x){return x.trim();}).filter(Boolean);
-      if(nama.length) out[hari]=nama;
-    });
-    return {data:out, err:err};
-  }
-  function parsePegawai(teks){
-    var out=[], err=[];
-    (teks||'').split(/\n+/).forEach(function(ln){
-      ln=ln.trim(); if(!ln) return;
-      var p=ln.split('|');
-      if(p.length<2){ err.push(ln.slice(0,30)); return; }
-      var nama=p[0].trim(), jab=p.slice(1).join('|').trim();
-      if(nama&&jab) out.push({nama:nama, jabatan:jab});
-    });
-    return {data:out, err:err};
-  }
+      if(nama.length) out[hari]=nama; });
+    return {data:out,err:err}; }
+  function parsePegawai(teks){ var out=[],err=[];
+    (teks||'').split(/\n+/).forEach(function(ln){ ln=ln.trim(); if(!ln) return;
+      var p=ln.split('|'); if(p.length<2){ err.push(ln.slice(0,30)); return; }
+      var nama=p[0].trim(), jab=p.slice(1).join('|').trim(); if(nama&&jab) out.push({nama:nama,jabatan:jab}); });
+    return {data:out,err:err}; }
 
-  // ---------- gabung nama untuk diucapkan ----------
   function gabung(list){ if(list.length===1) return list[0]; return list.slice(0,-1).join(', ')+' dan '+list[list.length-1]; }
-  function hariDari(t, now){
-    var m=t.match(/\b(senin|selasa|rabu|kamis|jumat|jum'at|sabtu|minggu)\b/);
-    if(m){ var map={senin:'Senin',selasa:'Selasa',rabu:'Rabu',kamis:'Kamis',jumat:'Jumat',"jum'at":'Jumat',sabtu:'Sabtu',minggu:'Minggu'}; return map[m[1]]; }
+  function hariDari(t,now){ var m=t.match(/\b(senin|selasa|rabu|kamis|jumat|jum'at|sabtu|minggu)\b/);
+    if(m){ var mp={senin:'Senin',selasa:'Selasa',rabu:'Rabu',kamis:'Kamis',jumat:'Jumat',"jum'at":'Jumat',sabtu:'Sabtu',minggu:'Minggu'}; return mp[m[1]]; }
     if(/\bbesok\b/.test(t)){ var d=new Date(now); d.setDate(d.getDate()+1); return HARI[d.getDay()]; }
     if(/\blusa\b/.test(t)){ var d2=new Date(now); d2.setDate(d2.getDate()+2); return HARI[d2.getDay()]; }
-    return HARI[now.getDay()];
-  }
+    return HARI[now.getDay()]; }
   function namaTokens(nama){ return low(nama).replace(/[.,]/g,' ').split(/\s+/).filter(function(w){ return w.length>=4 && !['bapak','ibu','pak','drs','dra'].includes(w); }); }
 
-  // ---------- penjawab ----------
-  function jawabTambahan(q, now){
-    now = now || new Date();
-    var t = low(q);
-    // --- GURU PIKET ---
-    if(/\bpiket\b/.test(t)){
-      var pk=getPiket();
-      if(!Object.keys(pk).length) return {text:'Maaf, data guru piket belum diisi pada ROBI. Silakan tanyakan ke Tata Usaha.', intent:'TAMBAHAN'};
-      var hari=hariDari(t, now);
-      if(hari==='Minggu') return {text:'Hari Minggu sekolah libur, tidak ada guru piket.', intent:'TAMBAHAN'};
-      var list=pk[hari];
-      if(!list||!list.length) return {text:'Maaf, data guru piket hari '+hari+' belum ada pada ROBI.', intent:'TAMBAHAN'};
-      return {text:'Guru piket hari '+hari+' adalah '+gabung(list)+'.', intent:'TAMBAHAN'};
-    }
-    // --- PEGAWAI / JABATAN ---
-    var niatPeg = /\b(jabatan|pegawai|staf|staff|tata usaha|operator|kepala sekolah|wakil kepala|wakasek|kepala tata usaha|kaur|petugas perpustakaan|pustakawan|penjaga sekolah|satpam|bendahara sekolah)\b/.test(t);
+  function jawabTambahan(q,now){ now=now||new Date(); var t=low(q);
+    if(/\bpiket\b/.test(t)){ var pk=getPiket();
+      if(!Object.keys(pk).length) return {text:'Maaf, data guru piket belum diisi pada ROBI. Silakan tanyakan ke Tata Usaha.',intent:'TAMBAHAN'};
+      var hari=hariDari(t,now);
+      if(hari==='Minggu') return {text:'Hari Minggu sekolah libur, tidak ada guru piket.',intent:'TAMBAHAN'};
+      var list=pk[hari]; if(!list||!list.length) return {text:'Maaf, data guru piket hari '+hari+' belum ada pada ROBI.',intent:'TAMBAHAN'};
+      return {text:'Guru piket hari '+hari+' adalah '+gabung(list)+'.',intent:'TAMBAHAN'}; }
+    var niatPeg=/\b(jabatan|pegawai|staf|staff|tata usaha|operator|kepala sekolah|wakil kepala|wakasek|kepala tata usaha|kaur|petugas perpustakaan|pustakawan|penjaga sekolah|satpam|bendahara sekolah)\b/.test(t);
     var peg=getPegawai();
     if(peg.length){
-      // cari berdasarkan jabatan yang disebut
-      var byJab=peg.filter(function(p){ var j=low(p.jabatan); return t.indexOf(j)>=0; });
-      if(byJab.length) return {text: byJab.map(function(p){return p.jabatan+' adalah '+p.nama;}).join('. ')+'.', intent:'TAMBAHAN'};
-      // cari berdasarkan nama pegawai yang disebut (hanya bila ada niat tanya jabatan/pegawai)
-      if(niatPeg || /jabatan/.test(t)){
-        var byNama=peg.filter(function(p){ return namaTokens(p.nama).some(function(tk){ return t.indexOf(tk)>=0; }); });
-        if(byNama.length) return {text: byNama.map(function(p){return p.nama+' menjabat sebagai '+p.jabatan;}).join('. ')+'.', intent:'TAMBAHAN'};
-      }
-      if(niatPeg) return {text:'Maaf, data itu belum ada pada ROBI. Silakan tanyakan ke Tata Usaha.', intent:'TAMBAHAN'};
-    } else if(niatPeg){
-      return {text:'Maaf, data pegawai belum diisi pada ROBI. Silakan tanyakan ke Tata Usaha.', intent:'TAMBAHAN'};
-    }
-    return null;
-  }
+      var byJab=peg.filter(function(p){ return t.indexOf(low(p.jabatan))>=0; });
+      if(byJab.length) return {text:byJab.map(function(p){return p.jabatan+' adalah '+p.nama;}).join('. ')+'.',intent:'TAMBAHAN'};
+      if(niatPeg || /jabatan/.test(t)){ var byNama=peg.filter(function(p){ return namaTokens(p.nama).some(function(tk){ return t.indexOf(tk)>=0; }); });
+        if(byNama.length) return {text:byNama.map(function(p){return p.nama+' menjabat sebagai '+p.jabatan;}).join('. ')+'.',intent:'TAMBAHAN'}; }
+      if(niatPeg) return {text:'Maaf, data itu belum ada pada ROBI. Silakan tanyakan ke Tata Usaha.',intent:'TAMBAHAN'};
+    } else if(niatPeg){ return {text:'Maaf, data pegawai belum diisi pada ROBI. Silakan tanyakan ke Tata Usaha.',intent:'TAMBAHAN'}; }
+    return null; }
 
-  // expose untuk dipanggil jawabData + uji
-  window.robiJawabTambahan = jawabTambahan;
-  window.robiDataTambahan = { getPiket:getPiket, getPegawai:getPegawai, parsePiket:parsePiket, parsePegawai:parsePegawai };
+  window.robiJawabTambahan=jawabTambahan;
+  window.robiDataTambahan={getPiket:getPiket,getPegawai:getPegawai,parsePiket:parsePiket,parsePegawai:parsePegawai};
 
-  // ---------- UI admin ----------
-  function pasangUI(){
-    try{
-      if(document.getElementById('secTambahan')) return;
-      var anchor = document.getElementById('secV2') || document.getElementById('secAI');
-      if(!anchor || !anchor.parentNode) return;
-      var pk=getPiket(), peg=getPegawai();
-      var piketTeks=Object.keys(pk).sort(function(a,b){return HARI.indexOf(a)-HARI.indexOf(b);}).map(function(h){return h+': '+pk[h].join(', ');}).join('\n');
-      var pegTeks=peg.map(function(p){return p.nama+' | '+p.jabatan;}).join('\n');
-      var sec=document.createElement('div'); sec.className='sec'; sec.id='secTambahan';
-      sec.innerHTML='<b>DATA TAMBAHAN (Guru Piket &amp; Pegawai)</b>'
-        +'<div class="row" style="font-size:12px;display:block;color:#a59dd3">Diisi dan diubah di komputer ini. ROBI menjawab langsung tanpa internet. Kosongkan baris yang tidak dipakai.</div>'
-        +'<div class="row" style="font-size:12px;display:block">GURU PIKET — satu baris satu hari: <b>Senin: Pak Mawardi, Bu Rukayah</b></div>'
-        +'<div class="row"><textarea id="tbPiket" class="ta" placeholder="Senin: ...\nSelasa: ...">'+piketTeks.replace(/</g,'&lt;')+'</textarea></div>'
-        +'<div class="row" style="font-size:12px;display:block">PEGAWAI &amp; JABATAN — satu baris: <b>Nama | Jabatan</b> (mis. Andi Saputra | Kepala Tata Usaha)</div>'
-        +'<div class="row"><textarea id="tbPeg" class="ta" placeholder="Nama | Jabatan">'+pegTeks.replace(/</g,'&lt;')+'</textarea></div>'
-        +'<div class="row"><button class="chip" id="tbSave">Simpan data</button><button class="chip" id="tbUjiBtn">Uji</button><input type="text" id="tbUji" placeholder="mis. piket hari ini siapa" style="flex:1;min-width:180px"></div>'
-        +'<div class="row" id="tbMsg" style="font-size:12px;display:block"></div>'
-        +'<div class="row" id="tbUjiOut" style="font-size:12px;display:block;color:#eae6ff"></div>';
-      anchor.parentNode.insertBefore(sec, anchor);
-      document.getElementById('tbSave').onclick=function(){
-        var rp=parsePiket(document.getElementById('tbPiket').value), rg=parsePegawai(document.getElementById('tbPeg').value);
-        lsSet('robi.piket', rp.data); lsSet('robi.pegawai', rg.data);
-        var msg='✓ Tersimpan: '+Object.keys(rp.data).length+' hari piket, '+rg.data.length+' pegawai.';
-        if(rp.err.length||rg.err.length) msg+=' ⚠ Baris dilewati: '+rp.err.concat(rg.err).slice(0,4).join(' · ');
-        document.getElementById('tbMsg').textContent=msg;
-      };
-      document.getElementById('tbUjiBtn').onclick=function(){
-        var r=jawabTambahan(document.getElementById('tbUji').value, new Date());
-        document.getElementById('tbUjiOut').textContent = r ? '→ '+r.text : '→ (bukan pertanyaan data tambahan)';
-      };
-    }catch(_){}
-  }
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', pasangUI); else pasangUI();
-  setTimeout(pasangUI, 800);
-} catch(e){ try{ console.warn('modul data tambahan tidak aktif:', e&&e.message||e); }catch(_){ } } })();
+  function pasangUI(){ try{
+    if(document.getElementById('secTambahan')) return;
+    var anchor=document.getElementById('secV2')||document.getElementById('secAI'); if(!anchor||!anchor.parentNode) return;
+    var pk=getPiket(), peg=getPegawai();
+    var piketTeks=Object.keys(pk).sort(function(a,b){return HARI.indexOf(a)-HARI.indexOf(b);}).map(function(h){return h+': '+pk[h].join(', ');}).join('\n');
+    var pegTeks=peg.map(function(p){return p.nama+' | '+p.jabatan;}).join('\n');
+    var E=function(s){return String(s).replace(/</g,'&lt;');};
+    var sec=document.createElement('div'); sec.className='sec'; sec.id='secTambahan';
+    sec.innerHTML='<b>DATA TAMBAHAN (Guru Piket &amp; Pegawai)</b>'
+      +'<div class="row" style="font-size:12px;display:block;color:#a59dd3">ROBI menjawab langsung tanpa internet. Simpan ke komputer ini, atau ekspor sebagai 1 file, atau tanam permanen ke paket lewat "Buat index.html".</div>'
+      +'<div class="row" style="font-size:12px;display:block">GURU PIKET — satu baris satu hari: <b>Senin: Pak Mawardi, Bu Rukayah</b></div>'
+      +'<div class="row"><textarea id="tbPiket" class="ta" placeholder="Senin: ...">'+E(piketTeks)+'</textarea></div>'
+      +'<div class="row" style="font-size:12px;display:block">PEGAWAI &amp; JABATAN — satu baris: <b>Nama | Jabatan</b></div>'
+      +'<div class="row"><textarea id="tbPeg" class="ta" placeholder="Nama | Jabatan">'+E(pegTeks)+'</textarea></div>'
+      +'<div class="row"><button class="chip" id="tbSave">Simpan data</button>'
+        +'<button class="chip" id="tbExport">Ekspor (.json)</button>'
+        +'<label class="chip" style="cursor:pointer">Impor (.json)<input type="file" id="tbImport" accept=".json" style="display:none"></label>'
+        +'<button class="chip" id="tbBuild">Buat index.html</button>'
+        +'<button class="chip" id="tbReset">Pakai data bawaan</button></div>'
+      +'<div class="row"><input type="text" id="tbUji" placeholder="mis. piket hari ini siapa" style="flex:1;min-width:180px"><button class="chip" id="tbUjiBtn">Uji</button></div>'
+      +'<div class="row" id="tbMsg" style="font-size:12px;display:block"></div>'
+      +'<div class="row" id="tbUjiOut" style="font-size:12px;display:block;color:#eae6ff"></div>';
+    anchor.parentNode.insertBefore(sec,anchor);
+    var curData=function(){ return { piket:parsePiket(document.getElementById('tbPiket').value).data, pegawai:parsePegawai(document.getElementById('tbPeg').value).data }; };
+    document.getElementById('tbSave').onclick=function(){ var d=curData(); lsSet('robi.piket',d.piket); lsSet('robi.pegawai',d.pegawai);
+      document.getElementById('tbMsg').textContent='✓ Tersimpan di komputer ini: '+Object.keys(d.piket).length+' hari piket, '+d.pegawai.length+' pegawai.'; };
+    document.getElementById('tbExport').onclick=function(){ var d=curData(); var blob=new Blob([JSON.stringify({jenis:'robi.tambahan',piket:d.piket,pegawai:d.pegawai,diekspor:new Date().toISOString()},null,2)],{type:'application/json'});
+      var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='robi_data_tambahan.json'; document.body.appendChild(a); a.click(); a.remove();
+      document.getElementById('tbMsg').textContent='✓ Diekspor sebagai robi_data_tambahan.json'; };
+    document.getElementById('tbImport').onchange=async function(ev){ var f=ev.target.files[0]; ev.target.value=''; if(!f) return;
+      try{ var j=JSON.parse(await f.text()); if(j.jenis!=='robi.tambahan') throw new Error('Bukan berkas data tambahan ROBI');
+        document.getElementById('tbPiket').value=Object.keys(j.piket||{}).sort(function(a,b){return HARI.indexOf(a)-HARI.indexOf(b);}).map(function(h){return h+': '+(j.piket[h]||[]).join(', ');}).join('\n');
+        document.getElementById('tbPeg').value=(j.pegawai||[]).map(function(p){return p.nama+' | '+p.jabatan;}).join('\n');
+        lsSet('robi.piket',j.piket||{}); lsSet('robi.pegawai',j.pegawai||[]);
+        document.getElementById('tbMsg').textContent='✓ Data diimpor dan disimpan.'; }
+      catch(e){ document.getElementById('tbMsg').textContent='Gagal impor: '+(e.message||e); } };
+    document.getElementById('tbReset').onclick=function(){ lsDel('robi.piket'); lsDel('robi.pegawai');
+      document.getElementById('tbMsg').textContent='Edit lokal dihapus. ROBI memakai data tertanam di file.'; };
+    document.getElementById('tbBuild').onclick=async function(){ try{
+      var d=curData(); var src=await fetch(location.pathname,{cache:'no-store'}).then(function(r){return r.text();});
+      if(!/^var __TB_BAWAAN=.*?;\/\/TB_END/m.test(src)) throw new Error('penanda data tidak ditemukan');
+      var js=JSON.stringify({piket:d.piket,pegawai:d.pegawai}).replace(/</g,'\\u003c');
+      src=src.replace(/^var __TB_BAWAAN=.*?;\/\/TB_END/m, 'var __TB_BAWAAN='+js+';//TB_END');
+      var a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([src],{type:'text/html'})); a.download='index.html'; document.body.appendChild(a); a.click(); a.remove();
+      document.getElementById('tbMsg').innerHTML='✓ <b>index.html</b> terunduh dengan data tertanam. Unggah ke GitHub (nama persis index.html).'; }
+      catch(e){ document.getElementById('tbMsg').textContent='Gagal membuat file: '+(e.message||e); } };
+    document.getElementById('tbUjiBtn').onclick=function(){ var r=jawabTambahan(document.getElementById('tbUji').value,new Date());
+      document.getElementById('tbUjiOut').textContent=r?('→ '+r.text):'→ (bukan pertanyaan data tambahan)'; };
+  }catch(_){} }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',pasangUI); else pasangUI();
+  setTimeout(pasangUI,800);
+} catch(e){ try{ console.warn('modul data tambahan tidak aktif:',e&&e.message||e); }catch(_){ } } })();
 
 
 </script>
