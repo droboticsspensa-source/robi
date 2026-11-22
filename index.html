@@ -3177,30 +3177,40 @@ var __TB_BAWAAN={"piket":{},"pegawai":[{"nama":"Hj. Dahirah, S.Sos","jabatan":"B
     var piketTeks=Object.keys(pk).sort(function(a,b){return HARI.indexOf(a)-HARI.indexOf(b);}).map(function(h){return h+': '+pk[h].join(', ');}).join('\n');
     var pegTeks=peg.map(function(p){return p.nama+' | '+p.jabatan;}).join('\n');
     var tugTeks=tug.map(function(p){return p.nama+' | '+p.jabatan;}).join('\n');
+    var _wali=getWali(), _siswa=getSiswa();
+    var nW=Object.keys(_wali).length, nPk=Object.keys(pk).length;
+    var nS=0; for(var _k in _siswa){ if(Array.isArray(_siswa[_k])) nS+=_siswa[_k].length; }
     var sec=document.createElement('div'); sec.className='sec'; sec.id='secTambahan';
-    sec.innerHTML='<b>DATA TAMBAHAN (Piket, Pegawai, Tugas Tambahan)</b>'
-      +'<div class="row" style="font-size:12px;display:block;color:#a59dd3">ROBI menjawab langsung tanpa internet. Simpan ke komputer ini, ekspor sebagai 1 file, atau tanam permanen lewat "Buat index.html".</div>'
-      +'<div class="row" style="font-size:12px;display:block">GURU PIKET — <b>Senin: Pak Mawardi, Bu Rukayah</b></div>'
-      +'<div class="row"><textarea id="tbPiket" class="ta" placeholder="Senin: ...">'+E(piketTeks)+'</textarea></div>'
-      +'<div class="row" style="font-size:12px;display:block">PEGAWAI &amp; JABATAN — <b>Nama | Jabatan</b></div>'
-      +'<div class="row"><textarea id="tbPeg" class="ta" placeholder="Nama | Jabatan">'+E(pegTeks)+'</textarea></div>'
-      +'<div class="row" style="font-size:12px;display:block">TUGAS TAMBAHAN (guru/pegawai) — <b>Nama | Jabatan</b> (mis. Pak Mawardi | Pembina OSIS)</div>'
-      +'<div class="row"><textarea id="tbTugas" class="ta" placeholder="Nama | Jabatan">'+E(tugTeks)+'</textarea></div>'
-      +'<div class="row"><button class="chip" id="tbSave">Simpan data</button>'
-        +'<button class="chip" id="tbExport">Ekspor (.json)</button>'
-        +'<label class="chip" style="cursor:pointer">Impor (.json)<input type="file" id="tbImport" accept=".json" style="display:none"></label>'
-        +'<button class="chip" id="tbBuild">Buat index.html</button>'
-        +'<button class="chip" id="tbReset">Pakai data bawaan</button></div>'
-      +'<div class="row"><input type="text" id="tbUji" placeholder="mis. siapa pembina OSIS" style="flex:1;min-width:180px"><button class="chip" id="tbUjiBtn">Uji</button></div>'
-      +'<div class="row" id="tbMsg" style="font-size:12px;display:block"></div>'
-      +'<div class="row" id="tbUjiOut" style="font-size:12px;display:block;color:#eae6ff"></div>';
+    sec.innerHTML='<b>DATA TAMBAHAN</b>'
+      +'<div class="row" style="font-size:13px;display:block;color:#cfc9ee">✓ Terpasang: '+nW+' wali kelas, '+nS+' siswa, '+peg.length+' pegawai, '+tug.length+' jabatan/tugas'+(nPk?(', '+nPk+' hari piket'):'')+'.</div>'
+      +'<div class="row" style="font-size:12px;display:block;color:#a59dd3">Data ini dikelola otomatis — biasanya tidak perlu diubah di sini. Untuk mengecek jawaban ROBI, cukup ketik pertanyaan di bawah.</div>'
+      +'<div class="row"><input type="text" id="tbUji" placeholder="mis. siapa wali kelas Ruby" style="flex:1;min-width:200px"><button class="chip" id="tbUjiBtn">Cek jawaban</button></div>'
+      +'<div class="row" id="tbUjiOut" style="font-size:13px;display:block;color:#eae6ff"></div>'
+      +'<div class="row"><button class="chip" id="tbMore" style="background:transparent;opacity:.85">⚙ Pengaturan lanjutan ▾</button></div>'
+      +'<div id="tbAdv" style="display:none">'
+        +'<div class="row" style="font-size:12px;display:block;color:#a59dd3">Khusus pengelola. Ubah data lalu tekan <b>Simpan data</b>. Tombol <b>Pakai data bawaan</b> akan menghapus semua perubahan lokal.</div>'
+        +'<div class="row" style="font-size:12px;display:block">GURU PIKET — <b>mis. Senin: Pak Mawardi, Bu Rukayah</b></div>'
+        +'<div class="row"><textarea id="tbPiket" class="ta" placeholder="Senin: ...">'+E(piketTeks)+'</textarea></div>'
+        +'<div class="row" style="font-size:12px;display:block">PEGAWAI &amp; JABATAN — <b>Nama | Jabatan</b></div>'
+        +'<div class="row"><textarea id="tbPeg" class="ta" placeholder="Nama | Jabatan">'+E(pegTeks)+'</textarea></div>'
+        +'<div class="row" style="font-size:12px;display:block">TUGAS TAMBAHAN (guru/pegawai) — <b>Nama | Jabatan</b> (mis. Pak Mawardi | Pembina OSIS)</div>'
+        +'<div class="row"><textarea id="tbTugas" class="ta" placeholder="Nama | Jabatan">'+E(tugTeks)+'</textarea></div>'
+        +'<div class="row"><button class="chip" id="tbSave">Simpan data</button>'
+          +'<button class="chip" id="tbExport">Ekspor (.json)</button>'
+          +'<label class="chip" style="cursor:pointer">Impor (.json)<input type="file" id="tbImport" accept=".json" style="display:none"></label>'
+          +'<button class="chip" id="tbBuild">Buat index.html</button>'
+          +'<button class="chip" id="tbReset" style="border:1px solid #a55">Pakai data bawaan</button></div>'
+      +'</div>'
+      +'<div class="row" id="tbMsg" style="font-size:12px;display:block"></div>';
     anchor.parentNode.insertBefore(sec,anchor);
+    document.getElementById('tbMore').onclick=function(){ var a=document.getElementById('tbAdv'); var sh=(a.style.display==='none'); a.style.display=sh?'block':'none'; this.textContent=sh?'⚙ Pengaturan lanjutan ▴':'⚙ Pengaturan lanjutan ▾'; };
     var cur=function(){ return { piket:parsePiket(document.getElementById('tbPiket').value).data, pegawai:parseList(document.getElementById('tbPeg').value).data, tugas:parseList(document.getElementById('tbTugas').value).data, wali:getWali(), jumlah:getJumlah(), siswa:getSiswa() }; };
     document.getElementById('tbSave').onclick=function(){ var d=cur(); lsSet('robi.piket',d.piket); lsSet('robi.pegawai',d.pegawai); lsSet('robi.tugas',d.tugas);
       document.getElementById('tbMsg').textContent='✓ Tersimpan di komputer ini: '+Object.keys(d.piket).length+' hari piket, '+d.pegawai.length+' pegawai, '+d.tugas.length+' tugas tambahan.'; };
     document.getElementById('tbExport').onclick=function(){ var d=cur(); var blob=new Blob([JSON.stringify({jenis:'robi.tambahan',piket:d.piket,pegawai:d.pegawai,tugas:d.tugas,wali:d.wali,jumlah:d.jumlah,siswa:d.siswa,diekspor:new Date().toISOString()},null,2)],{type:'application/json'});
       var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='robi_data_tambahan.json'; document.body.appendChild(a); a.click(); a.remove(); document.getElementById('tbMsg').textContent='✓ Diekspor.'; };
     document.getElementById('tbImport').onchange=async function(ev){ var f=ev.target.files[0]; ev.target.value=''; if(!f) return;
+      if(!confirm('Impor berkas ini akan menimpa data piket/pegawai/tugas (dan wali/siswa bila ada) yang terpasang sekarang. Lanjutkan?')) return;
       try{ var j=JSON.parse(await f.text()); if(j.jenis!=='robi.tambahan') throw new Error('Bukan berkas data tambahan ROBI');
         document.getElementById('tbPiket').value=Object.keys(j.piket||{}).sort(function(a,b){return HARI.indexOf(a)-HARI.indexOf(b);}).map(function(h){return h+': '+(j.piket[h]||[]).join(', ');}).join('\n');
         document.getElementById('tbPeg').value=(j.pegawai||[]).map(function(p){return p.nama+' | '+p.jabatan;}).join('\n');
@@ -3208,7 +3218,7 @@ var __TB_BAWAAN={"piket":{},"pegawai":[{"nama":"Hj. Dahirah, S.Sos","jabatan":"B
         lsSet('robi.piket',j.piket||{}); lsSet('robi.pegawai',j.pegawai||[]); lsSet('robi.tugas',j.tugas||[]); if(j.wali) lsSet('robi.wali',j.wali); if(j.jumlah) lsSet('robi.jumlah',j.jumlah); if(j.siswa) lsSet('robi.siswa',j.siswa);
         document.getElementById('tbMsg').textContent='✓ Data diimpor dan disimpan.'; }
       catch(e){ document.getElementById('tbMsg').textContent='Gagal impor: '+(e.message||e); } };
-    document.getElementById('tbReset').onclick=function(){ lsDel('robi.piket'); lsDel('robi.pegawai'); lsDel('robi.tugas'); lsDel('robi.wali'); lsDel('robi.jumlah'); lsDel('robi.siswa'); document.getElementById('tbMsg').textContent='Edit lokal dihapus. ROBI memakai data tertanam di file.'; };
+    document.getElementById('tbReset').onclick=function(){ if(!confirm('Hapus SEMUA perubahan lokal (piket, pegawai, tugas, wali, siswa) dan kembali ke data bawaan ROBI?\n\nTindakan ini tidak bisa dibatalkan.')) return; lsDel('robi.piket'); lsDel('robi.pegawai'); lsDel('robi.tugas'); lsDel('robi.wali'); lsDel('robi.jumlah'); lsDel('robi.siswa'); document.getElementById('tbMsg').textContent='Edit lokal dihapus. ROBI memakai data tertanam di file.'; };
     document.getElementById('tbBuild').onclick=async function(){ try{
       var d=cur(); var src=await fetch(location.pathname,{cache:'no-store'}).then(function(r){return r.text();});
       if(!/^var __TB_BAWAAN=.*?;\/\/TB_END/m.test(src)) throw new Error('penanda data tidak ditemukan');
