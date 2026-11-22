@@ -3060,12 +3060,12 @@ var __TB_BAWAAN={"piket":{},"pegawai":[{"nama":"Hj. Dahirah, S.Sos","jabatan":"B
   function lsSet(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); return true; }catch(_){ return false; } }
   function lsDel(k){ try{ localStorage.removeItem(k); }catch(_){} }
   var TB=(typeof __TB_BAWAAN==='object'&&__TB_BAWAAN)?__TB_BAWAAN:{piket:{},pegawai:[],tugas:[],wali:{},jumlah:{},siswa:{}};
-  function getPiket(){ var l=lsGetJ('robi.piket'); if(l&&typeof l==='object') return l; return TB.piket||{}; }
-  function getPegawai(){ var l=lsGetJ('robi.pegawai'); if(Array.isArray(l)) return l; return Array.isArray(TB.pegawai)?TB.pegawai:[]; }
-  function getTugas(){ var l=lsGetJ('robi.tugas'); if(Array.isArray(l)) return l; return Array.isArray(TB.tugas)?TB.tugas:[]; }
-  function getWali(){ var l=lsGetJ('robi.wali'); if(l&&typeof l==='object') return l; return TB.wali||{}; }
-  function getJumlah(){ var l=lsGetJ('robi.jumlah'); if(l&&typeof l==='object') return l; return TB.jumlah||{}; }
-  function getSiswa(){ var l=lsGetJ('robi.siswa'); if(l&&typeof l==='object') return l; return TB.siswa||{}; }
+  function getPiket(){ var l=lsGetJ('robi.piket'); if(l&&typeof l==='object'&&Object.keys(l).length) return l; return TB.piket||{}; }
+  function getPegawai(){ var l=lsGetJ('robi.pegawai'); if(Array.isArray(l)&&l.length) return l; return Array.isArray(TB.pegawai)?TB.pegawai:[]; }
+  function getTugas(){ var l=lsGetJ('robi.tugas'); if(Array.isArray(l)&&l.length) return l; return Array.isArray(TB.tugas)?TB.tugas:[]; }
+  function getWali(){ var l=lsGetJ('robi.wali'); if(l&&typeof l==='object'&&Object.keys(l).length) return l; return TB.wali||{}; }
+  function getJumlah(){ var l=lsGetJ('robi.jumlah'); if(l&&typeof l==='object'&&Object.keys(l).length) return l; return TB.jumlah||{}; }
+  function getSiswa(){ var l=lsGetJ('robi.siswa'); if(l&&typeof l==='object'&&Object.keys(l).length) return l; return TB.siswa||{}; }
 
   function parsePiket(teks){ var out={},err=[];
     (teks||'').split(/\n+/).forEach(function(ln){ ln=ln.trim(); if(!ln) return;
@@ -3118,7 +3118,7 @@ var __TB_BAWAAN={"piket":{},"pegawai":[{"nama":"Hj. Dahirah, S.Sos","jabatan":"B
       for(var wk in w){ var rb=wk.replace(/^(vii|viii|ix)\s+/i,'').toLowerCase(); if(rb && t.indexOf(rb)>=0) return {text:'Wali kelas '+wk+' adalah '+w[wk]+'.',intent:'TAMBAHAN'}; }
       return null; }
     // --- JUMLAH SISWA ---
-    if(/(jumlah|berapa|banyak)/.test(t) && /(siswa|murid|peserta didik)/.test(t)){ var jm=getJumlah();
+    if(/(jumlah|berapa|banyak)/.test(t) && /(siswa|murid|peserta didik|orang)/.test(t)){ var jm=getJumlah();
       for(var jk in jm){ var rb2=jk.replace(/^(vii|viii|ix)\s+/i,'').toLowerCase(); if(rb2 && t.indexOf(rb2)>=0){ var cc=jm[jk]; return {text:'Kelas '+jk+' berjumlah '+cc.jml+' siswa, terdiri dari '+cc.L+' laki-laki dan '+cc.P+' perempuan.',intent:'TAMBAHAN'}; } }
       return null; }
     // --- SISWA (nama, kelas, NIS) ---
@@ -3127,7 +3127,7 @@ var __TB_BAWAAN={"piket":{},"pegawai":[{"nama":"Hj. Dahirah, S.Sos","jabatan":"B
       if(/(siswa|murid)/.test(t) && /(siapa saja|sebutkan|daftar|nama)/.test(t)){
         for(var sk in sw){ var srb=sk.replace(/^(vii|viii|ix)\s+/i,'').toLowerCase(); if(srb && t.indexOf(srb)>=0) return {text:'Siswa kelas '+sk+', berjumlah '+sw[sk].length+': '+sw[sk].map(function(x){return x[1];}).join(', ')+'.',intent:'TAMBAHAN'}; }
       }
-      if(/(di kelas mana|kelas apa|kelas berapa|kelas mana|\bnis\b|nomor induk)/.test(t)){
+      if(/(di kelas mana|kelas apa|kelas berapa|kelas mana|\bnis\b|nomor induk|apakah)/.test(t)){
         var hs=[]; for(var sk2 in sw){ sw[sk2].forEach(function(st){ var tk=namaTokens(st[1]); var hit=tk.filter(function(w){return t.indexOf(w)>=0;}).length; if(hit>=1) hs.push({kelas:sk2,st:st,hit:hit}); }); }
         if(hs.length){ hs.sort(function(a,b){return b.hit-a.hit;}); var mx=hs[0].hit; hs=hs.filter(function(h){return h.hit===mx;}).slice(0,8);
           if(/\bnis\b|nomor induk/.test(t)) return {text:hs.map(function(h){return h.st[0]?('NIS '+h.st[1]+' adalah '+h.st[0]):('NIS '+h.st[1]+' belum tercatat');}).join('. ')+'.',intent:'TAMBAHAN'};
@@ -3136,7 +3136,7 @@ var __TB_BAWAAN={"piket":{},"pegawai":[{"nama":"Hj. Dahirah, S.Sos","jabatan":"B
     }
     var peg=getPegawai(), tug=getTugas(), all=peg.concat(tug);
     // --- DAFTAR PEGAWAI / STAF ---
-    if(/\b(pegawai|staf|staff|karyawan)\b/.test(t)){
+    if(/\b(pegawai|staf|staff|karyawan|tata usaha)\b/.test(t)){
       if(!peg.length) return {text:'Maaf, data pegawai belum diisi pada ROBI. Silakan tanyakan ke Tata Usaha.',intent:'TAMBAHAN'};
       var byj={}; peg.forEach(function(p){ (byj[p.jabatan]=byj[p.jabatan]||[]).push(pdk(p.nama)); });
       return {text: Object.keys(byj).map(function(j){ return j+': '+gabung(byj[j]); }).join('. ')+'.', intent:'TAMBAHAN'};
@@ -3160,6 +3160,13 @@ var __TB_BAWAAN={"piket":{},"pegawai":[{"nama":"Hj. Dahirah, S.Sos","jabatan":"B
     return null; }
 
   window.robiJawabTambahan=jawabTambahan;
+  function buildRef(){ try{ var w=getWali(),p=getPegawai(),tg=getTugas(),jm=getJumlah(); var L=[];
+    if(tg.length) L.push('Jabatan/tugas tambahan: '+tg.map(function(x){return x.jabatan+' = '+x.nama;}).join('; ')+'.');
+    if(p.length) L.push('Pegawai/staf: '+p.map(function(x){return x.jabatan+' = '+x.nama;}).join('; ')+'.');
+    var wk=Object.keys(w); if(wk.length) L.push('Wali kelas: '+wk.map(function(k){return k+' = '+w[k];}).join('; ')+'.');
+    var jk=Object.keys(jm); if(jk.length) L.push('Jumlah siswa per kelas: '+jk.map(function(k){return k+' '+jm[k].jml+' ('+jm[k].L+'L/'+jm[k].P+'P)';}).join('; ')+'.');
+    if(!L.length) return ''; return '\n\nDATA PEJABAT, WALI KELAS, PEGAWAI, JUMLAH SISWA (jawab dari sini bila ditanya; sebut nama apa adanya; untuk nama siswa per kelas atau NIS, katakan datanya ada dan sebut dari hasil alat):\n- '+L.join('\n- ')+'\n'; }catch(_){ return ''; } }
+  if(typeof nameRule==='function'){ var _nrTB=nameRule; nameRule=function(){ return _nrTB()+buildRef(); }; }
   window.robiDataTambahan={getPiket:getPiket,getPegawai:getPegawai,getTugas:getTugas,parsePiket:parsePiket,parseList:parseList};
 
   function pasangUI(){ try{
