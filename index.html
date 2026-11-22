@@ -801,7 +801,7 @@ setPhase("idle");
 //  - Alat agent berjalan di komputer ini: waktu, info sekolah, agenda, pengumuman, catat pertanyaan
 //  - Sumber jawaban: data resmi sekolah + pengetahuan umum AI. Tanpa data pribadi.
 // =====================================================================
-const KB_BAWAAN={"info":[],"agenda":[],"pengumuman":[]};//KB_END
+const KB_BAWAAN={"info":[{"judul":"Prestasi Robotik (D-ROBOTICS)","isi":"Tim robotik SMP Negeri 1 Pancarijang meraih Juara 2 tingkat Provinsi Sulawesi Selatan dan Sulawesi Barat, serta Juara 2 pada ajang Mechatronics Contest tingkat regional.","sumber":"Tribun Timur"},{"judul":"Sekolah Favorit dan Pendaftar PPDB 2026/2027","isi":"SMP Negeri 1 Pancarijang menjadi sekolah favorit di Sidrap. Pada PPDB tahun ajaran 2026/2027 tercatat 213 pendaftar, sehingga jumlah rombongan belajar ditambah dari enam menjadi tujuh kelas.","sumber":"Tribun Timur"}],"agenda":[],"pengumuman":[]};//KB_END
 const KIOS_VER="kios-1.0";
 let KIOSK = lsGet("robi_kios")!=="0";              // bawaan: mode kios menyala
 let sesi="siaga", sesiTimer=null, sesiStart=0, lastSpoken="", lastSpokenEnd=0, needTap=false;
