@@ -309,7 +309,7 @@ async function readSSE(r,onData){
      if(line.startsWith("data:")){ const d=line.slice(5).trim(); if(d&&d!=="[DONE]"){ try{ onData(JSON.parse(d)); }catch(_){} } } } }
 }
 function errOf(status,j,prov){
- const msg=(j&&j.error&&(j.error.message||j.error.type))||("HTTP "+status);
+ const msg=(j&&j.error&&(typeof j.error==="string"?j.error:(j.error.message||j.error.type)))||("HTTP "+status);
  const credit=/credit|balance|billing/i.test(msg);
  return {code:status===429?"rate_limited":(status===401||status===403||credit)?"bad_key":"api_error",message:msg,status,prov,fatal:status===401||status===403||credit};
 }
