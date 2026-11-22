@@ -157,6 +157,7 @@ input[type=range]{accent-color:#9a66ff;vertical-align:middle}
     <div class="row"><input type="password" id="aiGeminiKey" placeholder="Kunci Gemini (opsional, cadangan)" style="flex:1;min-width:200px" autocomplete="off"></div>
     <div class="row"><button class="chip" id="aiTest">Uji kunci</button><button class="chip" id="aiBuild">Buat index.html</button><button class="chip" id="aiClear">Hapus kunci uji</button></div>
     <div class="row" id="aiInfo" style="font-size:12px;display:block"></div>
+    <div class="row"><label>Level jawaban AI <select id="aiLevelSel"><option value="low">Low — ringkas &amp; cepat (disarankan)</option><option value="medium">Medium — lebih lengkap</option><option value="high">High — paling analitis</option></select></label></div>
   </div>
   <div class="sec"><b>MIKROFON</b>
     <div class="row" id="aiDiag" style="font-size:11.5px;color:#a59dd3">Diagnosa: memeriksa…</div>
@@ -274,9 +275,19 @@ function enk(key){ const e=btoa(key.split("").reverse().join("")); const p=[]; f
 function builtinKey(){ return unk(BUILTIN_AI.gemini.k); }
 const aiOff={};            // layanan yang dimatikan sementara (kunci salah/saldo habis)
 let aiUsed="";
+// ---------- Proxy aman + Level jawaban AI ----------
+const ROBI_PROXY=(function(){try{var v=localStorage.getItem("robi.proxy");if(v)return v;}catch(_){}return "https://robi-proxy.drobotics-spensa.workers.dev";})();
+const ROBI_PROXY_TOKEN=(function(){try{return localStorage.getItem("robi.proxyToken")||"";}catch(_){return "";}})();
+function aiLevel(){try{var v=localStorage.getItem("robi.level");if(v==="low"||v==="medium"||v==="high")return v;}catch(_){}return "low";}
+function levelCfg(){var L=aiLevel();
+ if(L==="high")   return {claude:"claude-sonnet-5-5",gemini:"gemini-flash-latest",max:1200};
+ if(L==="medium") return {claude:"claude-haiku-5-5",gemini:"gemini-flash-lite-latest",max:800};
+ return                  {claude:"claude-haiku-5-5",gemini:"gemini-flash-lite-latest",max:400};
+}
 function aiChain(){
  let loc={}; try{ loc=JSON.parse(localStorage.getItem("robi_ai")||"{}"); }catch(_){}
  const ch=[];
+ if(ROBI_PROXY) ch.push({prov:"gemini",viaProxy:true,key:"proxy",model:levelCfg().gemini,src:"proxy"});
  if(ADMIN&&loc.claudeKey) ch.push({prov:"claude",key:loc.claudeKey,model:BUILTIN_AI.claude.model,src:"uji-admin"});
  const ck=unk(BUILTIN_AI.claude.k); if(ck) ch.push({prov:"claude",key:ck,model:BUILTIN_AI.claude.model,src:"bawaan"});
  if(ADMIN&&loc.geminiKey) ch.push({prov:"gemini",key:loc.geminiKey,model:BUILTIN_AI.gemini.model,src:"uji-admin"});
@@ -315,14 +326,20 @@ async function callClaude(c,msgs,signal,onText){
 }
 async function callGemini(c,msgs,signal,onText){
  const {sys,m}=sysSplit(msgs);
- const body={contents:m.map(x=>({role:x.role==="assistant"?"model":"user",parts:[{text:x.content}]})),generationConfig:{maxOutputTokens:500,temperature:0.7}};
+ const body={contents:m.map(x=>({role:x.role==="assistant"?"model":"user",parts:[{text:x.content}]})),generationConfig:{maxOutputTokens:levelCfg().max,temperature:0.7}};
  if(sys) body.systemInstruction={parts:[{text:sys}]};
  const first=c.model||BUILTIN_AI.gemini.model;
  const models=[first,...["gemini-flash-lite-latest","gemini-flash-latest","gemini-2.5-flash"].filter(x=>x!==first)];
  let lastE;
  for(const model of models){
-   const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:streamGenerateContent?alt=sse&key=${encodeURIComponent(c.key)}`,
-     {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body),signal});
+   let r;
+   if(c.viaProxy){
+     const ph={"Content-Type":"application/json"}; if(ROBI_PROXY_TOKEN) ph["x-robi-token"]=ROBI_PROXY_TOKEN;
+     r=await fetch(ROBI_PROXY,{method:"POST",headers:ph,body:JSON.stringify({prov:"gemini",payload:{model,stream:true,body}}),signal});
+   } else {
+     r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:streamGenerateContent?alt=sse&key=${encodeURIComponent(c.key)}`,
+       {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body),signal});
+   }
    if(r.ok){ let text=""; await readSSE(r,ev=>{ const t=(ev.candidates?.[0]?.content?.parts||[]).map(p=>p.text||"").join(""); if(t){ text+=t; onText&&onText(text); } });
      if(text.trim()) return text.trim(); lastE={code:"api_error",message:"jawaban kosong",prov:"gemini"}; continue; }
    const j=await r.json().catch(()=>({})); lastE=errOf(r.status,j,"gemini");
@@ -359,7 +376,9 @@ function initAIForm(){
  let loc={}; try{ loc=JSON.parse(localStorage.getItem("robi_ai")||"{}"); }catch(_){}
  $("aiClaudeKey").value=loc.claudeKey||""; $("aiGeminiKey").value=loc.geminiKey||"";
  const ck=!!unk(BUILTIN_AI.claude.k), gk=!!unk(BUILTIN_AI.gemini.k);
- $("aiInfo").innerHTML=`Tertanam di file ini: Claude <b>${ck?"ada":"belum"}</b> · Gemini <b>${gk?"ada":"belum"}</b>.`;
+ const proxOn=!!ROBI_PROXY;
+ $("aiInfo").innerHTML=`Otak utama: <b>${proxOn?"Gemini lewat proxy aman":"Gemini"}</b> · Level: <b>${aiLevel()}</b> · Cadangan tertanam: Gemini ${gk?"ada":"belum"}.`;
+ try{ const ls=$("aiLevelSel"); if(ls){ ls.value=aiLevel(); ls.onchange=function(){ try{ localStorage.setItem("robi.level",ls.value); }catch(_){} initAIForm(); }; } }catch(_){}
 }
 function saveLocal(patch){ let loc={}; try{ loc=JSON.parse(localStorage.getItem("robi_ai")||"{}"); }catch(_){} Object.assign(loc,patch); try{ localStorage.setItem("robi_ai",JSON.stringify(loc)); }catch(_){} }
 $("aiTest").onclick=async()=>{
