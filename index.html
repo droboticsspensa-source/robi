@@ -475,8 +475,8 @@ function noMic(){ watchPermission(); openMicModal(micHelp()); running=false; mic
 function setupWeb(){
  const SR=window.SpeechRecognition||window.webkitSpeechRecognition; if(!SR) return null;
  const r=new SR(); r.lang="id-ID"; r.continuous=true; r.interimResults=true; let base=0;
- r.onresult=e=>{ for(let i=e.resultIndex;i<e.results.length;i++){const res=e.results[i]; onText(res[0].transcript,res.isFinal);} };
-  r.onerror=e=>{ lastErr="pengenal-suara: "+e.error;
+ r.onresult=e=>{ lastErr="-"; for(let i=e.resultIndex;i<e.results.length;i++){const res=e.results[i]; onText(res[0].transcript,res.isFinal);} };
+  r.onerror=e=>{ if(e.error!=="aborted"&&e.error!=="no-speech") lastErr="pengenal-suara: "+e.error;
    if(engine!=="web") return;
    if(e.error==="network"){ micReason="network"; micOn=false; if(running){ setPhase("tap"); setStatus(micHelp()); } return; }
    if(e.error==="not-allowed"||e.error==="service-not-allowed"||e.error==="audio-capture"){
