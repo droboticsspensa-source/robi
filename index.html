@@ -1456,6 +1456,7 @@ const KELAS_ALIAS = {
   'Ruby': ['ruby', 'rubi'], 'Algoritma': ['algoritma', 'algoritme'], 'Biner': ['biner', 'binner'], 'Cloud': ['cloud', 'klod', 'klaud', 'clod'],
   'Data Base': ['data base', 'database', 'databes', 'data bes']
 };
+try{ if(typeof window!=='undefined') window.KELAS_ALIAS=KELAS_ALIAS; }catch(_){}
 const MAPEL_ALIAS = {
   A: ['pendidikan agama', 'agama', 'pai', 'budi pekerti'], B: ['ppkn', 'pkn', 'pancasila', 'kewarganegaraan'],
   C: ['bahasa indonesia', 'b indonesia', 'b indo', 'bindo', 'bhs indonesia', 'indonesia'], D: ['matematika', 'mtk', 'matematik', 'mate'],
@@ -2630,7 +2631,7 @@ var __BUKU_BAWAAN={"Kelas":[{"kode":"VII-1","nama":"VII Analyst"},{"kode":"VII-2
     var mh = low.match(/\b(senin|selasa|rabu|kamis|jum'?at|sabtu|minggu|ahad)\b/);
     if (mh) { _ctxHari = mh[1]; return s; }
     var relatif = /\b(sekarang|hari ini|besok|lusa|kemarin|tiap|setiap)\b/.test(low);
-    var jadwalKelas = /\b(kelas|mengajar|ngajar|diajar|belajar|pelajaran|mapel|mata pelajaran|upacara|jam ke|jam pertama|jam kedua|jam ketiga|roster|jadwal)\b/.test(low);
+    var jadwalKelas = /\b(mengajar|ngajar|diajar|belajar|pelajaran|mapel|mata pelajaran|upacara|jam ke|jam pertama|jam kedua|jam ketiga|roster|jadwal)\b/.test(low);
     if (_ctxHari && jadwalKelas && !relatif) return _ctxHari + ' ' + s;
     return s;
   } catch(_) { return q; } }
@@ -3150,6 +3151,11 @@ var __TB_BAWAAN={"piket":{},"pegawai":[{"nama":"Hj. Dahirah, S.Sos","jabatan":"B
   function grupJabatan(list){ var byj={}; list.forEach(function(p){ (byj[p.jabatan]=byj[p.jabatan]||[]).push(pdk(p.nama)); });
     return Object.keys(byj).map(function(j){ return j+' adalah '+gabung(byj[j]); }).join('. ')+'.'; }
 
+  function kelasAlias(bare){ try{ var K=window.KELAS_ALIAS; if(K){ if(K[bare]) return K[bare]; for(var kk in K){ if(kk.toLowerCase()===String(bare).toLowerCase()) return K[kk]; } } }catch(_){} return [String(bare).toLowerCase()]; }
+  function kelasCocok(kelasKey,t){ var bare=String(kelasKey).replace(/^(vii|viii|ix)\s+/i,'').trim(); var al=kelasAlias(bare);
+    for(var i=0;i<al.length;i++){ var a=String(al[i]).toLowerCase().trim(); if(!a) continue;
+      if(new RegExp('(^|\\s)'+a.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'(\\s|$)').test(t)) return true; }
+    return false; }
   function jawabTambahan(q,now){ now=now||new Date(); var t=low(q).replace(/wakasek|waka\b/g,"wakil kepala").replace(/\bkepsek\b/g,"kepala sekolah").replace(/\bbk\b/g,"bimbingan konseling");
     // --- PIKET ---
     if(/\bpiket\b/.test(t)){ var pk=getPiket();
@@ -3160,17 +3166,17 @@ var __TB_BAWAAN={"piket":{},"pegawai":[{"nama":"Hj. Dahirah, S.Sos","jabatan":"B
       return {text:'Guru piket hari '+hari+' adalah '+gabung(list)+'.',intent:'TAMBAHAN'}; }
     // --- WALI KELAS ---
     if(/wali\s*kelas/.test(t)){ var w=getWali();
-      for(var wk in w){ var rb=wk.replace(/^(vii|viii|ix)\s+/i,'').toLowerCase(); if(rb && t.indexOf(rb)>=0) return {text:'Wali kelas '+wk+' adalah '+w[wk]+'.',intent:'TAMBAHAN'}; }
+      for(var wk in w){ if(kelasCocok(wk,t)) return {text:'Wali kelas '+wk+' adalah '+w[wk]+'.',intent:'TAMBAHAN'}; }
       return null; }
     // --- JUMLAH SISWA ---
     if(/(jumlah|berapa|banyak)/.test(t) && /(siswa|murid|peserta didik|orang)/.test(t)){ var jm=getJumlah();
-      for(var jk in jm){ var rb2=jk.replace(/^(vii|viii|ix)\s+/i,'').toLowerCase(); if(rb2 && t.indexOf(rb2)>=0){ var cc=jm[jk]; return {text:'Kelas '+jk+' berjumlah '+cc.jml+' siswa, terdiri dari '+cc.L+' laki-laki dan '+cc.P+' perempuan.',intent:'TAMBAHAN'}; } }
+      for(var jk in jm){ if(kelasCocok(jk,t)){ var cc=jm[jk]; return {text:'Kelas '+jk+' berjumlah '+cc.jml+' siswa, terdiri dari '+cc.L+' laki-laki dan '+cc.P+' perempuan.',intent:'TAMBAHAN'}; } }
       return null; }
     // --- SISWA (nama, kelas, NIS) ---
     var sw=getSiswa();
     if(Object.keys(sw).length){
       if(/(siswa|murid)/.test(t) && /(siapa saja|sebutkan|daftar|nama)/.test(t)){
-        for(var sk in sw){ var srb=sk.replace(/^(vii|viii|ix)\s+/i,'').toLowerCase(); if(srb && t.indexOf(srb)>=0) return {text:'Siswa kelas '+sk+', berjumlah '+sw[sk].length+': '+sw[sk].map(function(x){return x[1];}).join(', ')+'.',intent:'TAMBAHAN'}; }
+        for(var sk in sw){ if(kelasCocok(sk,t)) return {text:'Siswa kelas '+sk+', berjumlah '+sw[sk].length+': '+sw[sk].map(function(x){return x[1];}).join(', ')+'.',intent:'TAMBAHAN'}; }
       }
       if(/(di kelas mana|kelas apa|kelas berapa|kelas mana|\bnis\b|nomor induk|apakah)/.test(t)){
         var hs=[]; for(var sk2 in sw){ sw[sk2].forEach(function(st){ var tk=namaTokens(st[1]); var hit=tk.filter(function(w){return t.indexOf(w)>=0;}).length; if(hit>=1) hs.push({kelas:sk2,st:st,hit:hit}); }); }
