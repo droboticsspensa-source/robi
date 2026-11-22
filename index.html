@@ -2623,8 +2623,24 @@ var __BUKU_BAWAAN={"Kelas":[{"kode":"VII-1","nama":"VII Analyst"},{"kode":"VII-2
 
   // ---------- 1. JALUR CEPAT: jadwal, roster, jam pulang, kalender, informasi terkini dijawab langsung dari Data ----------
   const _hu = handleUser;
+  // Ingatan konteks untuk pertanyaan beruntun: simpan HARI terakhir, sisipkan ke pertanyaan jadwal lanjutan yang tidak menyebut hari
+  var _ctxHari = null;
+  function ctxAug(q){ try{
+    var s = String(q||''), low = s.toLowerCase();
+    var mh = low.match(/\b(senin|selasa|rabu|kamis|jum'?at|sabtu|minggu|ahad)\b/);
+    if (mh) { _ctxHari = mh[1]; return s; }
+    var relatif = /\b(sekarang|hari ini|besok|lusa|kemarin|tiap|setiap)\b/.test(low);
+    var jadwalKelas = /\b(kelas|mengajar|ngajar|diajar|belajar|pelajaran|mapel|mata pelajaran|upacara|jam ke|jam pertama|jam kedua|jam ketiga|roster|jadwal)\b/.test(low);
+    if (_ctxHari && jadwalKelas && !relatif) return _ctxHari + ' ' + s;
+    return s;
+  } catch(_) { return q; } }
+  // Pertanyaan majemuk tentang pejabat (mis. "kepala sekolah dan wakasek kesiswaan") -> serahkan ke AI yang punya daftar jabatan lengkap
+  function _majemukJabatan(q){ var low = String(q||'').toLowerCase();
+    return /\b(siapa|sebutkan|nama)\b/.test(low) && /(\bdan\b|\bserta\b|\bjuga\b|,)/.test(low)
+      && /(kepala sekolah|wakil kepala|wakasek|\bwaka\b|pembina|koordinator|bendahara|sekretaris|operator|kepala perpustakaan|bimbingan|konseling|\bbk\b|wali kelas|pegawai|\bstaf\b|tata usaha)/.test(low); }
   handleUser = async function (text) {
-    const r = jawabData(text);
+    if (_majemukJabatan(text)) return _hu(text);
+    const r = jawabData(ctxAug(text));
     if (!(r.text && r.intent !== 'LLM')) return _hu(text);
     clearTimeout(sesiTimer); if (KIOSK && sesi === 'siaga') { sesi = 'aktif'; sesiStart = performance.now(); kiosUI(); } lastSpoken = '';
     addMsg('user', text); stopSpeaking(); const myTurn = ++turnId; setPhase('thinking');
