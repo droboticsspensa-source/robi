@@ -267,7 +267,7 @@ let capsReady=false, micReason="", gumTried=false, lastErr="-";
 // Kunci tersamar. Diganti lewat halaman admin: alamat ROBI + ?admin
 const BUILTIN_AI={
  claude:{model:"claude-haiku-5-5",k:[]},
- gemini:{model:"gemini-flash-lite-latest",k:["ZzlZVUVLM1NQR01mTFlWbWVY", "eDczTmg1bnFnSVp2RWd1cUUt", "RURnU0hlX0o2TlI4YkEuUUE="]}
+ gemini:{model:"gemini-flash-lite-latest",k:[]}
 };
 const ADMIN=/[?&]admin\b/.test(location.search);
 function unk(a){ try{ return a&&a.length?atob(a.join("")).split("").reverse().join(""):""; }catch(_){ return ""; } }
