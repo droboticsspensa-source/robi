@@ -727,16 +727,16 @@ async function handleUser(text){
  if(msgs[0].role!=="user") msgs.unshift({role:"user",content:"(lanjutan percakapan)"});
  msgs[0]={role:"user",content:sys+msgs[0].content};
  answerDone=false; pending=0; spokenUpTo=0; speakStarted=false;
- ctrl=new AbortController();
+ ctrl=new AbortController(); var myCtrl=ctrl, _timedOut=false, _wd=setTimeout(function(){ _timedOut=true; try{myCtrl.abort();}catch(_){} }, 30000);
  try{
    const r=await sample(msgs,{cache:false,modelTier:"quick",signal:ctrl.signal,onText:({text})=>{ if(myTurn!==turnId) return; bubble.textContent=(text||"…").replace(/\[\[[^\]]*\]?\]?/g,""); $("chat").scrollTop=1e9; flushSentences(text||"",false,myTurn);} });
-   if(myTurn!==turnId) return;
+   clearTimeout(_wd); if(myTurn!==turnId) return;
    let ans=(r.text||"").replace(/\[\[[^\]]*\]\]/g,"").trim();
    bubble.textContent=ans; history.push({role:"assistant",content:ans});
    flushSentences(ans,true,myTurn); answerDone=true; maybeFinish();
  }catch(e){
-   if(myTurn!==turnId) return;
-   history.pop(); bubble.textContent="(Maaf, gagal: "+((e&&(e.message||e.code))||"tidak diketahui")+")";
+   clearTimeout(_wd); if(myTurn!==turnId) return;
+   history.pop(); bubble.textContent=_timedOut?"(Maaf, jaringan sepertinya lambat. Silakan tanya lagi.)":("(Maaf, gagal: "+((e&&(e.message||e.code))||"tidak diketahui")+")");
    setStatus(e&&e.code==="no_key"?aiHelp():e&&e.code==="bad_key"?"Kunci API ditolak. Periksa di ⚙ → OTAK AI.":e&&e.code==="rate_limited"?"Kuota AI sedang habis/terlalu sering. Tunggu sebentar lalu coba lagi.":e&&e.code==="not_granted"?"Izin AI ditolak. Muat ulang halaman untuk mencoba lagi.":"Gangguan: "+(e&&(e.message||e.code)||e));
    answerDone=true; pending=0; backToListening();
  }
@@ -3320,7 +3320,8 @@ var __TB_BAWAAN={"piket":{},"pegawai":[{"nama":"Hj. Dahirah, S.Sos","jabatan":"B
     if(typeof sample!=='function') return;
     var teks=hist.map(function(m){ return (m.role==='user'?'Orang: ':'ROBI: ')+String(m.content||''); }).join('\n');
     var instr='[Instruksi] Dari percakapan berikut, buat SATU kalimat sangat pendek (maksimal 12 kata) berisi garis besar topik UMUM yang dibicarakan, agar bisa disapa lagi lain kali. Hanya hal umum dan TIDAK sensitif. JANGAN sertakan perasaan, kesehatan, keluarga, masalah pribadi, agama, suku, percintaan, atau uang. Jika tidak ada topik umum yang layak, jawab tepat satu tanda minus. [Akhir instruksi]\n\n'+teks;
-    var p=sample.external?sample([{role:'user',content:instr}],{cache:false}):sample(instr,{cache:false,modelTier:'quick'});
+    var _ac=null; try{ _ac=new AbortController(); setTimeout(function(){ try{_ac.abort();}catch(_){} },20000); }catch(_){}
+    var p=sample.external?sample([{role:'user',content:instr}],{cache:false,signal:_ac&&_ac.signal}):sample(instr,{cache:false,modelTier:'quick',signal:_ac&&_ac.signal});
     Promise.resolve(p).then(function(r){ try{
       var g=String((r&&r.text)||'').trim().replace(/^["'\-\s]+|["'\s]+$/g,'').trim();
       if(!g||g==='-'||g.length<4||g.length>140) return;
@@ -3347,7 +3348,7 @@ var __TB_BAWAAN={"piket":{},"pegawai":[{"nama":"Hj. Dahirah, S.Sos","jabatan":"B
         return; }
     } }catch(_){} return _huK(text); }; }
   if(typeof akhiriSesi==='function'){ var _akhirK=akhiriSesi; akhiriSesi=function(){ try{ ringkasSimpan(); }catch(_){} window.__robiSiapa=null; return _akhirK.apply(this,arguments); }; }
-  if(typeof mulaiSesi==='function'){ var _mulaiK=mulaiSesi; mulaiSesi=function(){ try{ ringkasSimpan(); }catch(_){} window.__robiSiapa=null; return _mulaiK.apply(this,arguments); }; }
+  if(typeof mulaiSesi==='function'){ var _mulaiK=mulaiSesi; mulaiSesi=function(){ window.__robiSiapa=null; return _mulaiK.apply(this,arguments); }; }
   // panel admin ringkas
   function pasangUIKenal(){ try{
     if(document.getElementById('secKenal')) return;
