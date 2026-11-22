@@ -736,7 +736,7 @@ async function handleUser(text){
    flushSentences(ans,true,myTurn); answerDone=true; maybeFinish();
  }catch(e){
    if(myTurn!==turnId) return;
-   history.pop(); bubble.textContent="(Maaf, gagal mendapat jawaban)";
+   history.pop(); bubble.textContent="(Maaf, gagal: "+((e&&(e.message||e.code))||"tidak diketahui")+")";
    setStatus(e&&e.code==="no_key"?aiHelp():e&&e.code==="bad_key"?"Kunci API ditolak. Periksa di ⚙ → OTAK AI.":e&&e.code==="rate_limited"?"Kuota AI sedang habis/terlalu sering. Tunggu sebentar lalu coba lagi.":e&&e.code==="not_granted"?"Izin AI ditolak. Muat ulang halaman untuk mencoba lagi.":"Gangguan: "+(e&&(e.message||e.code)||e));
    answerDone=true; pending=0; backToListening();
  }
