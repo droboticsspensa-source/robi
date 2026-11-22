@@ -3284,6 +3284,88 @@ var __TB_BAWAAN={"piket":{},"pegawai":[{"nama":"Hj. Dahirah, S.Sos","jabatan":"B
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',pasangUI); else pasangUI();
   setTimeout(pasangUI,800);
 } catch(e){ try{ console.warn('modul data tambahan tidak aktif:',e&&e.message||e); }catch(_){ } } })();
+
+// ===== ROBI KENALAN: ingat garis besar obrolan umum orang yang memperkenalkan diri (lokal, 1 kiosk, non-sensitif) =====
+(function(){ try{
+  var KEY='robi.kenalan', AKTIF='robi.kenalanAktif', MAX=300, UMUR=30*864e5;
+  function lw(s){ return (s==null?'':String(s)).toLowerCase(); }
+  function aktif(){ try{ return localStorage.getItem(AKTIF)!=='0'; }catch(_){ return true; } }
+  function muat(){ try{ var o=JSON.parse(localStorage.getItem(KEY)||'{}'); return (o&&typeof o==='object')?o:{}; }catch(_){ return {}; } }
+  function simpan(o){ try{ localStorage.setItem(KEY,JSON.stringify(o)); }catch(_){} }
+  function rapikan(o){ var now=Date.now();
+    Object.keys(o).forEach(function(k){ if(!o[k]||!o[k].waktu||(now-o[k].waktu)>UMUR) delete o[k]; });
+    var ks=Object.keys(o); if(ks.length>MAX){ ks.sort(function(a,b){return (o[a].waktu||0)-(o[b].waktu||0);}); ks.slice(0,ks.length-MAX).forEach(function(k){delete o[k];}); }
+    return o; }
+  var PENANDA=/\b(nama ?ku|nama saya|nama aku|saya bernama|aku bernama|perkenalkan|kenalkan|panggil saya|panggil aku)\b/;
+  var STOP=['saya','aku','nama','namaku','adalah','bernama','ini','dengan','robi','halo','hai','hallo','selamat','pagi','siang','sore','malam','ya','iya','dong','dari','kelas','guru','siswa','murid','mau','ingin','boleh','tolong','ingin'];
+  function ekstrak(text){
+    var t=' '+lw(text).replace(/[^a-z'\s]/g,' ').replace(/\s+/g,' ').trim()+' ';
+    var mm=PENANDA.exec(t); if(!mm) return null;
+    var sisa=t.slice(mm.index+mm[0].length).trim().split(/\s+/), kata=[];
+    for(var i=0;i<sisa.length && kata.length<3;i++){ var w=sisa[i];
+      if(kata.length===0 && ['saya','aku','nama','adalah','bernama'].indexOf(w)>=0) continue;
+      if(w.length<2) break;
+      if(['bapak','pak','ibu','bu','mas','mbak','kak','bang'].indexOf(w)>=0) continue;
+      if(STOP.indexOf(w)>=0) break;
+      kata.push(w); }
+    if(!kata.length) return null;
+    var sap=''; if(/\b(bapak|pak)\b/.test(t)) sap='Bapak'; else if(/\b(ibu|bu)\b/.test(t)) sap='Ibu';
+    var nama=kata.map(function(w){return w.charAt(0).toUpperCase()+w.slice(1);}).join(' ');
+    return {nama:nama,sapaan:sap,kunci:kata.join(' ')}; }
+  // jaring pengaman: jangan simpan ringkasan bila menyentuh hal sensitif
+  var SENSITIF=/(sakit|penyakit|demam|covid|sedih|menangis|nangis|depresi|stres|bunuh|mati|meninggal|cerai|pisah|bertengkar|dipukul|kekerasan|pacar|suka sama|benci|takut|trauma|miskin|utang|hutang|dibully|bully|perundungan|dihukum|narkoba|rokok|pelecehan|agama|suku|ras\b|kristen|islam|hindu|buddha|katolik)/i;
+  function ringkasSimpan(){ try{
+    if(!aktif()) return; var who=window.__robiSiapa; if(!who) return;
+    var hist=(typeof history!=='undefined'&&Array.isArray(history))?history.slice(-16):[]; if(hist.length<2) return;
+    if(typeof sample!=='function') return;
+    var teks=hist.map(function(m){ return (m.role==='user'?'Orang: ':'ROBI: ')+String(m.content||''); }).join('\n');
+    var instr='[Instruksi] Dari percakapan berikut, buat SATU kalimat sangat pendek (maksimal 12 kata) berisi garis besar topik UMUM yang dibicarakan, agar bisa disapa lagi lain kali. Hanya hal umum dan TIDAK sensitif. JANGAN sertakan perasaan, kesehatan, keluarga, masalah pribadi, agama, suku, percintaan, atau uang. Jika tidak ada topik umum yang layak, jawab tepat satu tanda minus. [Akhir instruksi]\n\n'+teks;
+    var p=sample.external?sample([{role:'user',content:instr}],{cache:false}):sample(instr,{cache:false,modelTier:'quick'});
+    Promise.resolve(p).then(function(r){ try{
+      var g=String((r&&r.text)||'').trim().replace(/^["'\-\s]+|["'\s]+$/g,'').trim();
+      if(!g||g==='-'||g.length<4||g.length>140) return;
+      if(SENSITIF.test(g)) return;
+      var o=rapikan(muat()); var rec=o[who.kunci]||{nama:who.nama,sapaan:who.sapaan,jumlah:0};
+      rec.nama=who.nama; if(who.sapaan) rec.sapaan=who.sapaan; rec.topik=g; rec.waktu=Date.now(); rec.jumlah=(rec.jumlah||0)+1;
+      o[who.kunci]=rec; simpan(o);
+    }catch(_){} }).catch(function(){});
+  }catch(_){} }
+  // sambung ke alur percakapan
+  if(typeof handleUser==='function'){ var _huK=handleUser;
+    handleUser=function(text){ try{ if(aktif()){
+      var low2=lw(text);
+      if(/\b(lupakan saya|hapus (data|ingatan) saya|jangan ingat saya)\b/.test(low2)){
+        try{ var o=muat(); var who=window.__robiSiapa; if(who&&o[who.kunci]){ delete o[who.kunci]; simpan(o); } }catch(_){}
+        window.__robiSiapa=null; try{ speakLine('Baik, saya sudah melupakannya. Privasi kamu aman.'); }catch(_){} return; }
+      var intro=ekstrak(text);
+      if(intro){ window.__robiSiapa=intro;
+        var o2=rapikan(muat()); var rec=o2[intro.kunci]; var sap=intro.sapaan||((rec&&rec.sapaan)||'');
+        var panggil=(sap?sap+' ':'')+intro.nama;
+        if(rec&&rec.topik){ try{ speakLine('Halo lagi, '+panggil+'! Senang bertemu lagi. Terakhir kita sempat membahas '+rec.topik+'. Mau melanjutkannya, atau ada hal lain?'); }catch(_){} }
+        else { try{ speakLine('Senang berkenalan, '+panggil+'! Nanti saya ingat garis besar obrolan kita yang umum, supaya lain kali bisa menyapa dengan akrab. Kalau ingin saya lupakan, bilang saja: lupakan saya.'); }catch(_){}
+          o2[intro.kunci]={nama:intro.nama,sapaan:intro.sapaan,topik:'',waktu:Date.now(),jumlah:1}; simpan(o2); }
+        return; }
+    } }catch(_){} return _huK(text); }; }
+  if(typeof akhiriSesi==='function'){ var _akhirK=akhiriSesi; akhiriSesi=function(){ try{ ringkasSimpan(); }catch(_){} window.__robiSiapa=null; return _akhirK.apply(this,arguments); }; }
+  if(typeof mulaiSesi==='function'){ var _mulaiK=mulaiSesi; mulaiSesi=function(){ try{ ringkasSimpan(); }catch(_){} window.__robiSiapa=null; return _mulaiK.apply(this,arguments); }; }
+  // panel admin ringkas
+  function pasangUIKenal(){ try{
+    if(document.getElementById('secKenal')) return;
+    var anchor=document.getElementById('secTambahan')||document.getElementById('secV2')||document.getElementById('secAI'); if(!anchor||!anchor.parentNode) return;
+    var n=Object.keys(muat()).length;
+    var sec=document.createElement('div'); sec.className='sec'; sec.id='secKenal';
+    sec.innerHTML='<b>INGATAN PERKENALAN</b>'
+      +'<div class="row" style="font-size:12px;display:block;color:#a59dd3">ROBI mengingat garis besar obrolan UMUM orang yang memperkenalkan diri, agar menyapa akrab di kunjungan berikutnya. Hanya di komputer ini, kedaluwarsa 30 hari, tanpa hal sensitif.</div>'
+      +'<div class="row" style="font-size:13px;display:block;color:#cfc9ee">Tersimpan: <b id="knJml">'+n+'</b> orang.</div>'
+      +'<div class="row"><label><input type="checkbox" id="knAktif"> Aktifkan ingatan perkenalan</label></div>'
+      +'<div class="row"><button class="chip" id="knHapus" style="border:1px solid #a55">Hapus semua ingatan orang</button></div>'
+      +'<div class="row" id="knMsg" style="font-size:12px;display:block"></div>';
+    anchor.parentNode.insertBefore(sec,anchor.nextSibling);
+    var cb=document.getElementById('knAktif'); if(cb){ cb.checked=aktif(); cb.onchange=function(){ try{ localStorage.setItem(AKTIF, cb.checked?'1':'0'); }catch(_){} var m=document.getElementById('knMsg'); if(m) m.textContent=cb.checked?'Ingatan perkenalan aktif.':'Ingatan perkenalan dimatikan.'; }; }
+    var hp=document.getElementById('knHapus'); if(hp){ hp.onclick=function(){ if(!confirm('Hapus SEMUA ingatan perkenalan di komputer ini? Tidak bisa dibatalkan.')) return; try{ localStorage.removeItem(KEY); }catch(_){} var j=document.getElementById('knJml'); if(j) j.textContent='0'; var m=document.getElementById('knMsg'); if(m) m.textContent='Semua ingatan perkenalan dihapus.'; }; }
+  }catch(_){} }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',pasangUIKenal); else setTimeout(pasangUIKenal,900);
+}catch(e){ try{ console.warn('modul kenalan tidak aktif:',e&&e.message||e); }catch(_){} } })();
 </script>
 </body>
 </html>
