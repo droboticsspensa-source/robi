@@ -3019,6 +3019,15 @@ var __BUKU_BAWAAN={"Kelas":[{"kode":"VII-1","nama":"VII Analyst"},{"kode":"VII-2
   window.ROBI_BICARA = { pecah, kenaBug };
 })();
 
+// ---------- Perapihan pelafalan: hindari mesin suara mengeja nama HURUF KAPITAL ----------
+(function(){ if(typeof window.say!=='function') return;
+  var AKRONIM=/^(SMP|SMA|SMK|SD|MI|MTS|MA|UPT|OSIS|BK|TU|UKS|PMR|IPA|IPS|IPAS|PJOK|PAI|PABP|PKN|PPKN|TIK|SBK|MULOK|NIS|NISN|NIP|KKM|KBM|MPLS|WITA|WIB|WIT|RT|RW|TV|AC|WC|HP|AI|CCTV|VII|VIII|IX|RA|TK|QR)$/;
+  function titel(w){ return w.charAt(0)+w.slice(1).toLowerCase(); }
+  function rapihUcap(t){ try{ return String(t).replace(/[A-ZÀ-Ý]{2,}/g,function(w){ return AKRONIM.test(w)?w:titel(w); }); }catch(_){ return t; } }
+  var _saySebelum=window.say;
+  window.say=say=function(text,done){ return _saySebelum(rapihUcap(text),done); };
+})();
+
 /* === ROBI v1.2.3 — PERBAIKAN: jeda hening dihitung sejak ROBI benar-benar diam ===
    Akar masalah di v1.2: setiap kalimat dimasukkan ke antrean suara sekaligus, dan pengaman waktu
    tiap kalimat mulai dihitung sejak kalimat MASUK antrean, bukan sejak mulai diucapkan. Pada
